@@ -28,9 +28,9 @@ def pastel_rgb(name: str):
 
 
 class SheetView(Widget):
-    sheet_w = NumericProperty(0)     # mm
-    sheet_h = NumericProperty(0)     # mm
-    pieces  = ListProperty([])       # [{'name','x','y','w','h','rot','last_ok_x','last_ok_y'}, ...]
+    sheet_w = NumericProperty(0)
+    sheet_h = NumericProperty(0)
+    pieces  = ListProperty([])
     grid_on = BooleanProperty(False)
     snap_mm = NumericProperty(10)
 
@@ -75,14 +75,12 @@ class SheetView(Widget):
         return not (ax2 <= b["x"] or bx2 <= a["x"] or ay2 <= b["y"] or by2 <= a["y"])
 
     def _is_valid(self, idx, new_x, new_y, new_w, new_h):
-        # μέσα στο φύλλο
         if new_x < 0 or new_y < 0:
             return False
         if new_x + new_w > self.sheet_w:
             return False
         if new_y + new_h > self.sheet_h:
             return False
-        # όχι overlap
         test = {"x": new_x, "y": new_y, "w": new_w, "h": new_h}
         for j, other in enumerate(self.pieces):
             if j == idx:
@@ -101,13 +99,11 @@ class SheetView(Widget):
         ox, oy, s = self._layout_metrics()
         self.canvas.clear()
         with self.canvas:
-            # φύλλο
             Color(1,1,1,1)
             Rectangle(pos=(ox,oy), size=(self.sheet_w*s, self.sheet_h*s))
             Color(0,0,0,1)
             Line(rectangle=(ox,oy,self.sheet_w*s,self.sheet_h*s), width=1.4)
 
-            # grid κάθε 100mm
             if self.grid_on:
                 Color(0.8,0.8,0.8,1)
                 spacing = 100
@@ -120,7 +116,6 @@ class SheetView(Widget):
                     Rectangle(pos=(ox, oy + gy*s), size=(self.sheet_w*s, 1))
                     gy += spacing
 
-            # κομμάτια
             for i, p in enumerate(self.pieces):
                 r,g,b = pastel_rgb(p["name"])
                 Color(r,g,b,1)
@@ -401,14 +396,31 @@ class CutApp(App):
         else:
             self.root_widget = root
 
-        self.pieces = []   # [(w,h,qty), ...]
-        self._panels = []  # [SheetPanel,...]
+        self.pieces = []
+        self._panels = []
         return self.root_widget
 
     def set_status(self, txt):
         self.root_widget.ids.summary_label.text = txt
 
-    # ------- piece list controls -------
+    def _append_log(self, longtext):
+        try:
+            out_dir = self.user_data_dir
+            os.makedirs(out_dir, exist_ok=True)
+            path = os.path.join(out_dir, "debug_log.txt")
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(longtext + "\n\n")
+        except:
+            pass  # ακόμα κι αν δεν μπορεί να γράψει, δεν ρίχνουμε crash
+
+    def report(self, stage, detail=""):
+        # μικρό status στην οθόνη
+        self.set_status(f"ERR: {stage}")
+        # πλήρες log σε αρχείο
+        full = f"[{stage}] {detail}\nTRACE:\n{traceback.format_exc()}"
+        self._append_log(full)
+        return
+
     def add_piece(self, *args):
         ids = self.root_widget.ids
         try:
@@ -417,9 +429,8 @@ class CutApp(App):
             q = int(ids.pq.text.strip())
             if w<=0 or h<=0 or q<=0:
                 raise ValueError
-        except:
-            self.set_status("Λάθος τεμάχιο (θετικοί ακέραιοι).")
-            return
+        except Exception as e:
+            return self.report("ADD_PIECE_PARSE", str(e))
 
         self.pieces.append((w,h,q))
         ids.piece_list.add_widget(
@@ -434,6 +445,7 @@ class CutApp(App):
         ids.pw.text = ""
         ids.ph.text = ""
         ids.pq.text = "1"
+        self.set_status("OK: added piece")
 
     def clear_pieces(self, *args):
         self.pieces = []
@@ -441,7 +453,6 @@ class CutApp(App):
         plist.clear_widgets()
         self.set_status("Λίστα άδεια.")
 
-    # ------- save / load job -------
     def _job_path(self):
         os.makedirs(self.user_data_dir, exist_ok=True)
         return os.path.join(self.user_data_dir, "job.json")
@@ -458,9 +469,12 @@ class CutApp(App):
             "pieces": self.pieces,
         }
         path = self._job_path()
-        with open(path,"w",encoding="utf-8") as f:
-            json.dump(job,f,ensure_ascii=False,indent=2)
-        self.set_status(f"Job saved: {path}")
+        try:
+            with open(path,"w",encoding="utf-8") as f:
+                json.dump(job,f,ensure_ascii=False,indent=2)
+        except Exception as e:
+            return self.report("SAVE_JOB", str(e))
+        self.set_status(f"Job saved")
 
     def load_job(self, *args):
         path = self._job_path()
@@ -471,8 +485,7 @@ class CutApp(App):
             with open(path,"r",encoding="utf-8") as f:
                 job = json.load(f)
         except Exception as e:
-            self.set_status(f"Σφάλμα load: {e}")
-            return
+            return self.report("LOAD_JOB_PARSE", str(e))
 
         ids = self.root_widget.ids
         ids.sheet_w.text = str(job.get("sheet_w","2800"))
@@ -495,11 +508,10 @@ class CutApp(App):
                 )
             )
 
-        self.set_status("Job loaded.")
+        self.set_status("Job loaded")
 
-    # ------- run optimizer with staged debug -------
     def run_optimizer(self, *args):
-        # STAGE 1: διάβασμα input
+        # STAGE1: διάβασμα input
         try:
             ids = self.root_widget.ids
             W = int(ids.sheet_w.text.strip())
@@ -509,8 +521,7 @@ class CutApp(App):
             allow_rot = ids.rot_allowed.active
             strat = ids.strategy.text.strip()
         except Exception as e:
-            self.set_status("STAGE1 ERROR (parse inputs): " + str(e))
-            return
+            return self.report("STAGE1_INPUT", str(e))
 
         if W<=0 or H<=0 or K<0 or att<=0:
             self.set_status("Δώσε σωστές θετικές τιμές.")
@@ -519,7 +530,7 @@ class CutApp(App):
             self.set_status("Δεν έχεις τεμάχια.")
             return
 
-        # STAGE 2: optimizer
+        # STAGE2: optimizer
         try:
             sheets = optimize_cut_multi_start(
                 W,H,K,
@@ -529,66 +540,79 @@ class CutApp(App):
                 att
             )
         except Exception as e:
-            self.set_status(
-                "STAGE2 ERROR (optimizer): " + str(e) + "\n" + traceback.format_exc()
-            )
-            return
+            return self.report("STAGE2_OPTIMIZER", str(e))
 
         if not sheets:
-            self.set_status("STAGE2 RESULT: άδειο αποτέλεσμα από optimizer.")
+            self.set_status("Άδειο αποτέλεσμα (κανένα φύλλο).")
             return
 
-        # STAGE 3: καθάρισμα παλιών panel/ζωγραφιάς
+        # STAGE3: καθάρισμα container
         try:
             cont = ids.sheets_container
             cont.clear_widgets()
             self._panels = []
         except Exception as e:
-            self.set_status("STAGE3 ERROR (clear container): " + str(e))
-            return
+            return self.report("STAGE3_CONTAINER", str(e))
 
         total_used = 0
         total_area = 0
 
-        # STAGE 4: δημιουργία panel για κάθε φύλλο
-        try:
-            for idx, sh in enumerate(sheets, start=1):
-                if sh is None:
-                    self.set_status("STAGE4 WARNING: sh is None σε index " + str(idx))
-                    continue
+        # STAGE4: δημιουργία πάνελ ανά φύλλο
+        for idx, sh in enumerate(sheets, start=1):
+            if sh is None:
+                # log και συνεχίζουμε
+                self._append_log("[STAGE4_NULL] sheet is None at index " + str(idx))
+                continue
 
+            # 4A: metrics φύλλου
+            try:
                 used = sh.get_used_area()
                 total = sh.sheet_w * sh.sheet_h
                 total_used += used
                 total_area += total
+            except Exception as e:
+                return self.report("STAGE4A_GETAREA", str(e))
 
-                placed_list = []
-                for p in sh.get_all_placed():
-                    placed_list.append({
-                        "name": p.piece.name,
-                        "x": p.x,
-                        "y": p.y,
-                        "w": p.width(),
-                        "h": p.height(),
-                        "rot": p.rotated,
-                        "last_ok_x": p.x,
-                        "last_ok_y": p.y
+            # 4B: χτίσε placed_list
+            safe_placed_list = []
+            try:
+                for pp in sh.get_all_placed():
+                    nm = getattr(pp.piece, "name", "?")
+                    x  = getattr(pp, "x", 0)
+                    y  = getattr(pp, "y", 0)
+                    try:
+                        wv = pp.width()
+                        hv = pp.height()
+                    except Exception as ee:
+                        return self.report("STAGE4B_PIECESIZE", str(ee))
+                    safe_placed_list.append({
+                        "name": nm if nm is not None else "?",
+                        "x": float(x),
+                        "y": float(y),
+                        "w": float(wv),
+                        "h": float(hv),
+                        "rot": bool(getattr(pp, "rotated", False)),
+                        "last_ok_x": float(x),
+                        "last_ok_y": float(y),
                     })
+            except Exception as e:
+                return self.report("STAGE4B_BUILD_LIST", str(e))
 
+            # 4C: panel / add_widget
+            try:
                 panel = SheetPanel(
                     idx,
                     sh.sheet_w,
                     sh.sheet_h,
-                    placed_list,
+                    safe_placed_list,
                     self
                 )
                 cont.add_widget(panel)
                 self._panels.append(panel)
-        except Exception as e:
-            self.set_status("STAGE4 ERROR (panel build): " + str(e))
-            return
+            except Exception as e:
+                return self.report("STAGE4C_PANEL", str(e))
 
-        # STAGE 5: τελικό summary
+        # STAGE5: summary
         try:
             overall_util = (100.0*total_used/total_area) if total_area else 0.0
             ids.export_all_btn.disabled = False
@@ -597,10 +621,8 @@ class CutApp(App):
                 f"OK ✔  Φύλλα: {len(self._panels)} | Κάλυψη {overall_util:.1f}%"
             )
         except Exception as e:
-            self.set_status("STAGE5 ERROR (finalize): " + str(e))
-            return
+            return self.report("STAGE5_SUMMARY", str(e))
 
-    # ------- export/share all PNG -------
     def export_all_png(self, *args):
         if not self._panels:
             self.set_status("Δεν υπάρχουν φύλλα για export.")
@@ -610,7 +632,7 @@ class CutApp(App):
         for panel in self._panels:
             path = os.path.join(out_dir, f"layout_sheet_{panel.index}.png")
             panel.view.export_png(path)
-        self.set_status(f"PNG saved in: {out_dir}")
+        self.set_status("PNG saved")
 
     def share_all_png(self, *args):
         if not self._panels:
@@ -623,8 +645,10 @@ class CutApp(App):
             path = os.path.join(out_dir, f"layout_sheet_{panel.index}.png")
             panel.view.export_png(path)
             paths.append(path)
-        last_paths = "\n".join(paths[-2:])
-        self.set_status("Έτοιμα για share:\n" + last_paths)
+        # μικρό status για να μην κόβεται
+        self.set_status("Ready to share")
+        # full λίστα πάει στο log
+        self._append_log("[SHARE_FILES] " + "\n".join(paths))
 
 
 if __name__ == "__main__":
