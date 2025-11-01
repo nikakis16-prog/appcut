@@ -1,6 +1,7 @@
 #:kivy 2.3.0
 
-<CutRoot@BoxLayout>:
+# Δεν το ορίζουμε πλέον σαν template με @. Το φτιάχνουμε κατευθείαν.
+BoxLayout:
     orientation: "vertical"
     padding: 10
     spacing: 10
@@ -12,24 +13,53 @@
 
         BoxLayout:
             orientation: "vertical"
-            Label: text: "Πλάτος φύλλου (mm)"; font_size: "14sp"
-            TextInput: id: sheet_w; text: "2800"; multiline: False
-            Label: text: "Ύψος φύλλου (mm)"; font_size: "14sp"
-            TextInput: id: sheet_h; text: "2070"; multiline: False
+            Label:
+                text: "Πλάτος φύλλου (mm)"
+                font_size: "14sp"
+            TextInput:
+                id: sheet_w
+                text: "2800"
+                multiline: False
+            Label:
+                text: "Ύψος φύλλου (mm)"
+                font_size: "14sp"
+            TextInput:
+                id: sheet_h
+                text: "2070"
+                multiline: False
 
         BoxLayout:
             orientation: "vertical"
-            Label: text: "Kerf (mm)"; font_size: "14sp"
-            TextInput: id: kerf; text: "3"; multiline: False
-            Label: text: "Attempts"; font_size: "14sp"
-            TextInput: id: attempts; text: "50"; multiline: False
+            Label:
+                text: "Kerf (mm)"
+                font_size: "14sp"
+            TextInput:
+                id: kerf
+                text: "3"
+                multiline: False
+            Label:
+                text: "Attempts"
+                font_size: "14sp"
+            TextInput:
+                id: attempts
+                text: "50"
+                multiline: False
 
         BoxLayout:
             orientation: "vertical"
-            Label: text: "Rotation allowed?"; font_size: "14sp"
-            CheckBox: id: rot_allowed; active: True
-            Label: text: "Strategy"; font_size: "14sp"
-            Spinner: id: strategy; text: "BSSF"; values: ["BSSF","BAF","BLSF"]
+            Label:
+                text: "Rotation allowed?"
+                font_size: "14sp"
+            CheckBox:
+                id: rot_allowed
+                active: True
+            Label:
+                text: "Strategy"
+                font_size: "14sp"
+            Spinner:
+                id: strategy
+                text: "BSSF"
+                values: ["BSSF","BAF","BLSF"]
 
     BoxLayout:
         size_hint_y: None
@@ -38,24 +68,38 @@
 
         BoxLayout:
             orientation: "vertical"
-            Label: text: "Πλάτος κομματιού"; font_size: "14sp"
-            TextInput: id: pw; text: ""; multiline: False
+            Label:
+                text: "Πλάτος κομματιού"
+                font_size: "14sp"
+            TextInput:
+                id: pw
+                text: ""
+                multiline: False
 
         BoxLayout:
             orientation: "vertical"
-            Label: text: "Ύψος κομματιού"; font_size: "14sp"
-            TextInput: id: ph; text: ""; multiline: False
+            Label:
+                text: "Ύψος κομματιού"
+                font_size: "14sp"
+            TextInput:
+                id: ph
+                text: ""
+                multiline: False
 
         BoxLayout:
             orientation: "vertical"
-            Label: text: "Ποσότητα"; font_size: "14sp"
-            TextInput: id: pq; text: "1"; multiline: False
+            Label:
+                text: "Ποσότητα"
+                font_size: "14sp"
+            TextInput:
+                id: pq
+                text: "1"
+                multiline: False
 
         Button:
             text: "Πρόσθεσε κομμάτι"
             on_release: app.add_piece()
 
-    # Λίστα τεμαχίων
     BoxLayout:
         size_hint_y: None
         height: "110dp"
@@ -64,7 +108,9 @@
         BoxLayout:
             orientation: "vertical"
             size_hint_x: 0.7
-            Label: text: "Λίστα τεμαχίων"; font_size: "14sp"
+            Label:
+                text: "Λίστα τεμαχίων"
+                font_size: "14sp"
             ScrollView:
                 do_scroll_x: False
                 do_scroll_y: True
@@ -93,14 +139,12 @@
                 height: "34dp"
                 on_release: app.clear_pieces()
 
-    # Υπολογισμός
     Button:
         size_hint_y: None
         height: "48dp"
         text: "ΥΠΟΛΟΓΙΣΕ"
         on_release: app.run_optimizer()
 
-    # Κατάσταση / status
     Label:
         id: summary_label
         text: "Δεν έχει γίνει υπολογισμός ακόμα."
@@ -108,7 +152,6 @@
         height: "40dp"
         font_size: "14sp"
 
-    # Export όλων / Share όλων
     BoxLayout:
         size_hint_y: None
         height: "48dp"
@@ -126,7 +169,6 @@
             disabled: True
             on_release: app.share_all_png()
 
-    # Scroll περιοχή με τα φύλλα
     ScrollView:
         size_hint_y: 1
         do_scroll_x: True
