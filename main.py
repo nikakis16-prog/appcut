@@ -137,7 +137,6 @@ class SheetView(Widget):
             return False
         mx,my = self._px_to_mm(*touch.pos)
         hit = -1
-        # ψάχνουμε από πάνω προς τα κάτω (τελευταίο placed = πάντα πάνω)
         for i in range(len(self.pieces)-1, -1, -1):
             p = self.pieces[i]
             if p["x"] <= mx <= p["x"]+p["w"] and p["y"] <= my <= p["y"]+p["h"]:
@@ -162,15 +161,12 @@ class SheetView(Widget):
         cand_x = mx - dx
         cand_y = my - dy
 
-        # clamp στα όρια
         cand_x = max(0, min(cand_x, self.sheet_w - p["w"]))
         cand_y = max(0, min(cand_y, self.sheet_h - p["h"]))
 
-        # snap αν grid ON
         if self.grid_on:
             cand_x = self._snap_val(cand_x)
             cand_y = self._snap_val(cand_y)
-            # ξανά clamp
             cand_x = max(0, min(cand_x, self.sheet_w - p["w"]))
             cand_y = max(0, min(cand_y, self.sheet_h - p["h"]))
 
@@ -215,10 +211,8 @@ class SheetView(Widget):
         img = Image.new("RGB", (target_w+2, target_h+2), (255,255,255))
         d = ImageDraw.Draw(img)
 
-        # φύλλο περίγραμμα
         d.rectangle([(1,1),(1+W*scale,1+H*scale)], outline=(0,0,0), width=4)
 
-        # grid (οπτικό) αν είναι ενεργό
         if self.grid_on:
             spacing = 100
             gx = spacing
@@ -238,7 +232,6 @@ class SheetView(Widget):
                 )
                 gy += spacing
 
-        # font
         try:
             font = ImageFont.truetype("arial.ttf", 20)
         except:
@@ -504,65 +497,64 @@ class CutApp(App):
 
         self.set_status("Job loaded.")
 
-    # ------- run optimizer -------
+    # ------- run optimizer with staged debug -------
     def run_optimizer(self, *args):
+        # STAGE 1: διάβασμα input
         try:
             ids = self.root_widget.ids
-
-            # διάβασμα τιμών
-            try:
-                W = int(ids.sheet_w.text.strip())
-                H = int(ids.sheet_h.text.strip())
-                K = int(ids.kerf.text.strip())
-                att = int(ids.attempts.text.strip())
-            except:
-                self.set_status("Λάθος διαστάσεις φύλλου/kerf/attempts.")
-                return
-
+            W = int(ids.sheet_w.text.strip())
+            H = int(ids.sheet_h.text.strip())
+            K = int(ids.kerf.text.strip())
+            att = int(ids.attempts.text.strip())
             allow_rot = ids.rot_allowed.active
             strat = ids.strategy.text.strip()
+        except Exception as e:
+            self.set_status("STAGE1 ERROR (parse inputs): " + str(e))
+            return
 
-            if W<=0 or H<=0 or K<0 or att<=0:
-                self.set_status("Δώσε σωστές θετικές τιμές.")
-                return
-            if not self.pieces:
-                self.set_status("Δεν έχεις τεμάχια.")
-                return
+        if W<=0 or H<=0 or K<0 or att<=0:
+            self.set_status("Δώσε σωστές θετικές τιμές.")
+            return
+        if not self.pieces:
+            self.set_status("Δεν έχεις τεμάχια.")
+            return
 
-            # τρέχει τον optimizer
-            try:
-                sheets = optimize_cut_multi_start(
-                    W,H,K,
-                    self.pieces,
-                    strat,
-                    allow_rot,
-                    att
-                )
-            except Exception as e:
-                # π.χ. κομμάτι που δεν χωράει στο φύλλο
-                self.set_status(
-                    "Σφάλμα optimizer: "
-                    + str(e)
-                    + "\n"
-                    + traceback.format_exc()
-                )
-                return
+        # STAGE 2: optimizer
+        try:
+            sheets = optimize_cut_multi_start(
+                W,H,K,
+                self.pieces,
+                strat,
+                allow_rot,
+                att
+            )
+        except Exception as e:
+            self.set_status(
+                "STAGE2 ERROR (optimizer): " + str(e) + "\n" + traceback.format_exc()
+            )
+            return
 
-            if not sheets:
-                self.set_status("Ο optimizer γύρισε None ή άδειο αποτέλεσμα.")
-                return
+        if not sheets:
+            self.set_status("STAGE2 RESULT: άδειο αποτέλεσμα από optimizer.")
+            return
 
+        # STAGE 3: καθάρισμα παλιών panel/ζωγραφιάς
+        try:
             cont = ids.sheets_container
             cont.clear_widgets()
             self._panels = []
+        except Exception as e:
+            self.set_status("STAGE3 ERROR (clear container): " + str(e))
+            return
 
-            total_used = 0
-            total_area = 0
+        total_used = 0
+        total_area = 0
 
-            # Χτίζουμε panels για κάθε φύλλο
+        # STAGE 4: δημιουργία panel για κάθε φύλλο
+        try:
             for idx, sh in enumerate(sheets, start=1):
                 if sh is None:
-                    self.set_status("Άδειο Sheet (None) μέσα στα αποτελέσματα.")
+                    self.set_status("STAGE4 WARNING: sh is None σε index " + str(idx))
                     continue
 
                 used = sh.get_used_area()
@@ -592,17 +584,21 @@ class CutApp(App):
                 )
                 cont.add_widget(panel)
                 self._panels.append(panel)
+        except Exception as e:
+            self.set_status("STAGE4 ERROR (panel build): " + str(e))
+            return
 
+        # STAGE 5: τελικό summary
+        try:
             overall_util = (100.0*total_used/total_area) if total_area else 0.0
             ids.export_all_btn.disabled = False
             ids.share_all_btn.disabled = False
             self.set_status(
-                f"Φύλλα: {len(self._panels)} | Συνολική κάλυψη {overall_util:.1f}%"
+                f"OK ✔  Φύλλα: {len(self._panels)} | Κάλυψη {overall_util:.1f}%"
             )
-
         except Exception as e:
-            # ANY άλλο απρόβλεπτο
-            self.set_status("Crash μέσα στο ΥΠΟΛΟΓΙΣΕ: " + str(e))
+            self.set_status("STAGE5 ERROR (finalize): " + str(e))
+            return
 
     # ------- export/share all PNG -------
     def export_all_png(self, *args):
