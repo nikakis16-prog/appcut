@@ -1,6 +1,5 @@
 #:kivy 2.3.0
 
-# Δεν το ορίζουμε πλέον σαν template με @. Το φτιάχνουμε κατευθείαν.
 BoxLayout:
     orientation: "vertical"
     padding: 10
@@ -20,6 +19,7 @@ BoxLayout:
                 id: sheet_w
                 text: "2800"
                 multiline: False
+                input_filter: 'int'
             Label:
                 text: "Ύψος φύλλου (mm)"
                 font_size: "14sp"
@@ -27,6 +27,7 @@ BoxLayout:
                 id: sheet_h
                 text: "2070"
                 multiline: False
+                input_filter: 'int'
 
         BoxLayout:
             orientation: "vertical"
@@ -37,6 +38,7 @@ BoxLayout:
                 id: kerf
                 text: "3"
                 multiline: False
+                input_filter: 'int'
             Label:
                 text: "Attempts"
                 font_size: "14sp"
@@ -44,6 +46,7 @@ BoxLayout:
                 id: attempts
                 text: "50"
                 multiline: False
+                input_filter: 'int'
 
         BoxLayout:
             orientation: "vertical"
@@ -75,6 +78,7 @@ BoxLayout:
                 id: pw
                 text: ""
                 multiline: False
+                input_filter: 'int'
 
         BoxLayout:
             orientation: "vertical"
@@ -85,6 +89,7 @@ BoxLayout:
                 id: ph
                 text: ""
                 multiline: False
+                input_filter: 'int'
 
         BoxLayout:
             orientation: "vertical"
@@ -95,6 +100,7 @@ BoxLayout:
                 id: pq
                 text: "1"
                 multiline: False
+                input_filter: 'int'
 
         Button:
             text: "Πρόσθεσε κομμάτι"
