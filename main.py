@@ -328,16 +328,20 @@ class SheetPanel(BoxLayout):
 
 # --------- APP ---------
 class CutApp(App):
-    title = "Cut Optimizer (Mobile)"
+    title = "Εργαλείο Κοπής"
 
     def build(self):
-        self.root_widget = Builder.load_file("cutapp.kv")
+        root = Builder.load_file("cutapp.kv")
+        if root is None:
+            fb = BoxLayout()
+            fb.add_widget(Label(text="KV load failed. Έλεγξε cutapp.kv"))
+            self.root_widget = fb
+        else:
+            self.root_widget = root
+
         self.pieces = []   # [(w,h,qty), ...]
         self._panels = []
         return self.root_widget
-
-    def set_status(self, txt):
-        self.root_widget.ids.summary_label.text = txt
 
     # ------- κομμάτια -------
     def add_piece(self):
@@ -513,3 +517,4 @@ class CutApp(App):
 
 if __name__ == "__main__":
     CutApp().run()
+
