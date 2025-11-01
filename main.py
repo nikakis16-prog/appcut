@@ -8,9 +8,9 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle, Line
 from kivy.uix.label import Label
 from kivy.uix.button import Button
+from kivy.metrics import dp
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.textinput import TextInput
-from kivy.metrics import dp
 
 from optimizer import optimize_cut_multi_start
 from PIL import Image, ImageDraw, ImageFont
@@ -75,12 +75,14 @@ class SheetView(Widget):
         return not (ax2 <= b["x"] or bx2 <= a["x"] or ay2 <= b["y"] or by2 <= a["y"])
 
     def _is_valid(self, idx, new_x, new_y, new_w, new_h):
+        # μέσα στο φύλλο
         if new_x < 0 or new_y < 0:
             return False
         if new_x + new_w > self.sheet_w:
             return False
         if new_y + new_h > self.sheet_h:
             return False
+        # όχι overlap
         test = {"x": new_x, "y": new_y, "w": new_w, "h": new_h}
         for j, other in enumerate(self.pieces):
             if j == idx:
@@ -99,11 +101,13 @@ class SheetView(Widget):
         ox, oy, s = self._layout_metrics()
         self.canvas.clear()
         with self.canvas:
+            # φύλλο
             Color(1,1,1,1)
             Rectangle(pos=(ox,oy), size=(self.sheet_w*s, self.sheet_h*s))
             Color(0,0,0,1)
             Line(rectangle=(ox,oy,self.sheet_w*s,self.sheet_h*s), width=1.4)
 
+            # grid κάθε 100mm (αν ενεργό)
             if self.grid_on:
                 Color(0.8,0.8,0.8,1)
                 spacing = 100
@@ -116,6 +120,7 @@ class SheetView(Widget):
                     Rectangle(pos=(ox, oy + gy*s), size=(self.sheet_w*s, 1))
                     gy += spacing
 
+            # κομμάτια
             for i, p in enumerate(self.pieces):
                 r,g,b = pastel_rgb(p["name"])
                 Color(r,g,b,1)
@@ -169,6 +174,7 @@ class SheetView(Widget):
             p["x"], p["y"] = cand_x, cand_y
             p["last_ok_x"], p["last_ok_y"] = cand_x, cand_y
         else:
+            # επέστρεψε στην τελευταία καλή θέση
             p["x"] = p.get("last_ok_x", p["x"])
             p["y"] = p.get("last_ok_y", p["y"])
 
@@ -206,8 +212,10 @@ class SheetView(Widget):
         img = Image.new("RGB", (target_w+2, target_h+2), (255,255,255))
         d = ImageDraw.Draw(img)
 
+        # περίγραμμα φύλλου
         d.rectangle([(1,1),(1+W*scale,1+H*scale)], outline=(0,0,0), width=4)
 
+        # grid στο export αν είναι ενεργό
         if self.grid_on:
             spacing = 100
             gx = spacing
@@ -255,16 +263,20 @@ class SheetView(Widget):
             cy = (y1+y2)/2
             for line in label.split("\n"):
                 tw, th = d.textsize(line, font=font)
-                d.text(
-                    (cx - tw/2, cy - th/2),
-                    line,
-                    fill=(0,0,0),
-                    font=font
-                )
+                d.text((cx - tw/2, cy - th/2),
+                       line,
+                       fill=(0,0,0),
+                       font=font)
                 cy += th
 
 
-class SheetPanel(BoxLayout):
+class SimplePanel(BoxLayout):
+    """
+    Ελαφρύ panel για Android:
+    - ΜΟΝΟ header με info
+    - και SheetView (drag / rotate / κλπ)
+    Καθόλου ToggleButton / TextInput κτλ μέσα στο panel.
+    """
     def __init__(self, index, sheet_w, sheet_h, placed_list, parent_app, **kwargs):
         super().__init__(
             orientation="vertical",
@@ -273,7 +285,8 @@ class SheetPanel(BoxLayout):
             spacing=6,
             **kwargs
         )
-        self.height = dp(400)
+        # πιο χαμηλό ύψος από το βαρύ panel, αλλά αρκετό να δεις
+        self.height = dp(380)
         self.index = index
         self.parent_app = parent_app
 
@@ -282,132 +295,31 @@ class SheetPanel(BoxLayout):
         util = (100.0*used/total) if total else 0.0
         scrap = total - used
 
-        self.header = Label(
-            text=f"Φύλλο {index} | {sheet_w}x{sheet_h} | Scrap: {scrap} | Κάλυψη {util:.1f}%",
+        header_lbl = Label(
+            text=f"Φύλλο {index} | {sheet_w}x{sheet_h} | Scrap {scrap} | Κάλυψη {util:.1f}%",
             size_hint_y=None,
-            height=dp(22),
+            height=dp(24),
             font_size="14sp"
         )
-        self.add_widget(self.header)
+        self.add_widget(header_lbl)
 
-        toolbar = BoxLayout(size_hint_y=None, height=dp(36), spacing=6)
-
-        self.grid_btn = ToggleButton(
-            text="Grid OFF",
-            state="normal",
-            size_hint_x=None,
-            width=dp(80)
-        )
-        self.grid_btn.bind(on_release=self._toggle_grid)
-        toolbar.add_widget(self.grid_btn)
-
-        toolbar.add_widget(Label(
-            text="Snap(mm):",
-            size_hint_x=None,
-            width=dp(70)
-        ))
-
-        self.snap_input = TextInput(
-            text="10",
-            multiline=False,
-            size_hint_x=None,
-            width=dp(60),
-            input_filter='int'
-        )
-        toolbar.add_widget(self.snap_input)
-
-        rot_btn = Button(
-            text="Rotate sel",
-            size_hint_x=None,
-            width=dp(90)
-        )
-        rot_btn.bind(on_release=self._rotate_current)
-        toolbar.add_widget(rot_btn)
-
-        export_btn = Button(
-            text="💾 PNG",
-            size_hint_x=None,
-            width=dp(70)
-        )
-        export_btn.bind(on_release=self._export_this)
-        toolbar.add_widget(export_btn)
-
-        share_btn = Button(
-            text="📤 Path",
-            size_hint_x=None,
-            width=dp(70)
-        )
-        share_btn.bind(on_release=self._share_this)
-        toolbar.add_widget(share_btn)
-
-        self.add_widget(toolbar)
-
+        # βάζουμε το SheetView
         self.view = SheetView(
             size_hint_y=None,
-            height=dp(320),
+            height=dp(340),
             sheet_w=sheet_w,
             sheet_h=sheet_h,
             pieces=placed_list,
             grid_on=False,
-            snap_mm=10
+            snap_mm=10,
         )
         self.add_widget(self.view)
 
-    def _toggle_grid(self, *args):
-        on = (self.grid_btn.state == "down")
-        self.grid_btn.text = "Grid ON" if on else "Grid OFF"
-
-        try:
-            self.view.snap_mm = max(1, int(self.snap_input.text.strip()))
-        except:
-            self.view.snap_mm = 10
-            self.snap_input.text = "10"
-
-        self.view.grid_on = on
-        self.view.redraw()
-
-    def _rotate_current(self, *args):
-        self.view.rotate_selected()
-
-    def _export_this(self, *args):
-        out_dir = self.parent_app.user_data_dir
+    def export_png(self, out_dir):
         os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, f"layout_sheet_{self.index}.png")
         self.view.export_png(path)
-        self.parent_app.set_status(f"Saved: {path}")
-
-    def _share_this(self, *args):
-        out_dir = self.parent_app.user_data_dir
-        os.makedirs(out_dir, exist_ok=True)
-        path = os.path.join(out_dir, f"layout_sheet_{self.index}.png")
-        self.view.export_png(path)
-        self.parent_app.set_status(f"Share this file: {path}")
-
-
-# Fallback panel: αν το SheetPanel σκάσει στο Android, φτιάχνουμε κάτι πολύ απλό
-class FallbackPanel(BoxLayout):
-    def __init__(self, idx, w, h, parent_app, **kwargs):
-        super().__init__(
-            orientation="vertical",
-            size_hint_y=None,
-            padding=10,
-            spacing=6,
-            **kwargs
-        )
-        self.height = dp(120)
-        self.add_widget(Label(
-            text=f"Φύλλο {idx} ({w}x{h})",
-            font_size="16sp",
-            size_hint_y=None,
-            height=dp(24)
-        ))
-        self.add_widget(Label(
-            text="(Fallback preview μόνο text)",
-            font_size="12sp",
-            size_hint_y=None,
-            height=dp(24)
-        ))
-        self.parent_app = parent_app
+        return path
 
 
 class CutApp(App):
@@ -422,8 +334,8 @@ class CutApp(App):
         else:
             self.root_widget = root
 
-        self.pieces = []
-        self._panels = []
+        self.pieces = []   # [(w,h,q), ...]
+        self._panels = []  # [SimplePanel,...]
         return self.root_widget
 
     def set_status(self, txt):
@@ -440,11 +352,14 @@ class CutApp(App):
             pass
 
     def report(self, stage, detail=""):
+        # Μικρό μήνυμα στο UI
         self.set_status(f"ERR:{stage}")
+        # Πλήρες log σε αρχείο
         full = f"[{stage}] {detail}\nTRACE:\n{traceback.format_exc()}"
         self._append_log(full)
         return
 
+    # ------- διαχείριση λίστας τεμαχίων --------
     def add_piece(self, *args):
         ids = self.root_widget.ids
         try:
@@ -477,6 +392,7 @@ class CutApp(App):
         plist.clear_widgets()
         self.set_status("Λίστα άδεια.")
 
+    # ------- save / load job --------
     def _job_path(self):
         os.makedirs(self.user_data_dir, exist_ok=True)
         return os.path.join(self.user_data_dir, "job.json")
@@ -534,8 +450,9 @@ class CutApp(App):
 
         self.set_status("Job loaded")
 
+    # ------- run optimizer --------
     def run_optimizer(self, *args):
-        # STAGE1
+        # STAGE1: διάβασμα input
         try:
             ids = self.root_widget.ids
             W = int(ids.sheet_w.text.strip())
@@ -554,7 +471,7 @@ class CutApp(App):
             self.set_status("Δεν έχεις τεμάχια.")
             return
 
-        # STAGE2
+        # STAGE2: optimizer
         try:
             sheets = optimize_cut_multi_start(
                 W,H,K,
@@ -570,7 +487,7 @@ class CutApp(App):
             self.set_status("Άδειο αποτέλεσμα (κανένα φύλλο).")
             return
 
-        # STAGE3
+        # STAGE3: καθάρισε container
         try:
             cont = ids.sheets_container
             cont.clear_widgets()
@@ -581,13 +498,12 @@ class CutApp(App):
         total_used = 0
         total_area = 0
 
-        # STAGE4
+        # STAGE4: χτίσε panels
         for idx, sh in enumerate(sheets, start=1):
             if sh is None:
                 self._append_log("[STAGE4_NULL] sheet is None at index " + str(idx))
                 continue
 
-            # 4A
             try:
                 used = sh.get_used_area()
                 total = sh.sheet_w * sh.sheet_h
@@ -596,18 +512,15 @@ class CutApp(App):
             except Exception as e:
                 return self.report("STAGE4A_GETAREA", str(e))
 
-            # 4B
+            # λίστα τοποθετημένων κομματιών
             safe_placed_list = []
             try:
                 for pp in sh.get_all_placed():
                     nm = getattr(pp.piece, "name", "?")
                     x  = getattr(pp, "x", 0)
                     y  = getattr(pp, "y", 0)
-                    try:
-                        wv = pp.width()
-                        hv = pp.height()
-                    except Exception as ee:
-                        return self.report("STAGE4B_PIECESIZE", str(ee))
+                    wv = pp.width()
+                    hv = pp.height()
                     safe_placed_list.append({
                         "name": nm if nm is not None else "?",
                         "x": float(x),
@@ -621,9 +534,9 @@ class CutApp(App):
             except Exception as e:
                 return self.report("STAGE4B_BUILD_LIST", str(e))
 
-            # 4C.1: create panel
+            # φτιάξε το απλό panel
             try:
-                panel = SheetPanel(
+                panel = SimplePanel(
                     idx,
                     sh.sheet_w,
                     sh.sheet_h,
@@ -631,31 +544,30 @@ class CutApp(App):
                     self
                 )
             except Exception as e:
-                # δεν έγινε καν το panel
+                # αυτό δεν θα έπρεπε πλέον να αποτυγχάνει,
+                # αλλά αν αποτύχει το γράφουμε
                 self._append_log(
-                    "[STAGE4C_PANELINIT_FAIL] "
+                    "[STAGE4C_SIMPLEPANEL_FAIL] "
                     + f"sheet {idx} {sh.sheet_w}x{sh.sheet_h} error: {e}"
                 )
-                # fallback panel
-                panel = FallbackPanel(idx, sh.sheet_w, sh.sheet_h, self)
+                self.set_status("ERR:STAGE4C_SIMPLEPANEL")
+                continue
 
-            # 4C.2: add panel to UI
+            # βάλε το panel στο UI
             try:
                 cont.add_widget(panel)
                 self._panels.append(panel)
             except Exception as e:
-                # ακόμα κι αν δεν μπαίνει στο UI,
-                # γράψε log και συνέχισε με τα άλλα φύλλα
                 self._append_log(
-                    "[STAGE4C_ADDWIDGET_FAIL] sheet "
+                    "[STAGE4D_ADDWIDGET_FAIL] sheet "
                     + str(idx)
                     + " err: "
                     + str(e)
                 )
-                # και εμφάνισε ERR στην οθόνη για να ξέρω ότι έγινε
-                self.set_status("ERR:STAGE4C_ADDWIDGET")
+                self.set_status("ERR:STAGE4D_ADDWIDGET")
+                continue
 
-        # STAGE5
+        # STAGE5: σύνοψη
         try:
             overall_util = (100.0*total_used/total_area) if total_area else 0.0
             ids.export_all_btn.disabled = False
@@ -666,6 +578,7 @@ class CutApp(App):
         except Exception as e:
             return self.report("STAGE5_SUMMARY", str(e))
 
+    # ------- export / share PNG --------
     def export_all_png(self, *args):
         if not self._panels:
             self.set_status("Δεν υπάρχουν φύλλα για export.")
@@ -673,10 +586,9 @@ class CutApp(App):
         out_dir = self.user_data_dir
         os.makedirs(out_dir, exist_ok=True)
         for panel in self._panels:
-            # FallbackPanel δεν έχει view => αγνόησέ τον
-            if hasattr(panel, "view"):
-                path = os.path.join(out_dir, f"layout_sheet_{panel.index}.png")
-                panel.view.export_png(path)
+            # κάθε SimplePanel έχει .export_png()
+            path = panel.export_png(out_dir)
+            self._append_log("[EXPORT] " + path)
         self.set_status("PNG saved")
 
     def share_all_png(self, *args):
@@ -687,12 +599,10 @@ class CutApp(App):
         os.makedirs(out_dir, exist_ok=True)
         paths = []
         for panel in self._panels:
-            if hasattr(panel, "view"):
-                path = os.path.join(out_dir, f"layout_sheet_{panel.index}.png")
-                panel.view.export_png(path)
-                paths.append(path)
+            path = panel.export_png(out_dir)
+            paths.append(path)
         self.set_status("Ready to share")
-        self._append_log("[SHARE_FILES] " + "\n".join(paths))
+        self._append_log("[SHARE_FILES]\n" + "\n".join(paths))
 
 
 if __name__ == "__main__":
