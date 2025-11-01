@@ -384,6 +384,32 @@ class SheetPanel(BoxLayout):
         self.parent_app.set_status(f"Share this file: {path}")
 
 
+# Fallback panel: αν το SheetPanel σκάσει στο Android, φτιάχνουμε κάτι πολύ απλό
+class FallbackPanel(BoxLayout):
+    def __init__(self, idx, w, h, parent_app, **kwargs):
+        super().__init__(
+            orientation="vertical",
+            size_hint_y=None,
+            padding=10,
+            spacing=6,
+            **kwargs
+        )
+        self.height = dp(120)
+        self.add_widget(Label(
+            text=f"Φύλλο {idx} ({w}x{h})",
+            font_size="16sp",
+            size_hint_y=None,
+            height=dp(24)
+        ))
+        self.add_widget(Label(
+            text="(Fallback preview μόνο text)",
+            font_size="12sp",
+            size_hint_y=None,
+            height=dp(24)
+        ))
+        self.parent_app = parent_app
+
+
 class CutApp(App):
     title = "Cut Optimizer (Mobile)"
 
@@ -411,12 +437,10 @@ class CutApp(App):
             with open(path, "a", encoding="utf-8") as f:
                 f.write(longtext + "\n\n")
         except:
-            pass  # ακόμα κι αν δεν μπορεί να γράψει, δεν ρίχνουμε crash
+            pass
 
     def report(self, stage, detail=""):
-        # μικρό status στην οθόνη
-        self.set_status(f"ERR: {stage}")
-        # πλήρες log σε αρχείο
+        self.set_status(f"ERR:{stage}")
         full = f"[{stage}] {detail}\nTRACE:\n{traceback.format_exc()}"
         self._append_log(full)
         return
@@ -474,7 +498,7 @@ class CutApp(App):
                 json.dump(job,f,ensure_ascii=False,indent=2)
         except Exception as e:
             return self.report("SAVE_JOB", str(e))
-        self.set_status(f"Job saved")
+        self.set_status("Job saved")
 
     def load_job(self, *args):
         path = self._job_path()
@@ -511,7 +535,7 @@ class CutApp(App):
         self.set_status("Job loaded")
 
     def run_optimizer(self, *args):
-        # STAGE1: διάβασμα input
+        # STAGE1
         try:
             ids = self.root_widget.ids
             W = int(ids.sheet_w.text.strip())
@@ -530,7 +554,7 @@ class CutApp(App):
             self.set_status("Δεν έχεις τεμάχια.")
             return
 
-        # STAGE2: optimizer
+        # STAGE2
         try:
             sheets = optimize_cut_multi_start(
                 W,H,K,
@@ -546,7 +570,7 @@ class CutApp(App):
             self.set_status("Άδειο αποτέλεσμα (κανένα φύλλο).")
             return
 
-        # STAGE3: καθάρισμα container
+        # STAGE3
         try:
             cont = ids.sheets_container
             cont.clear_widgets()
@@ -557,14 +581,13 @@ class CutApp(App):
         total_used = 0
         total_area = 0
 
-        # STAGE4: δημιουργία πάνελ ανά φύλλο
+        # STAGE4
         for idx, sh in enumerate(sheets, start=1):
             if sh is None:
-                # log και συνεχίζουμε
                 self._append_log("[STAGE4_NULL] sheet is None at index " + str(idx))
                 continue
 
-            # 4A: metrics φύλλου
+            # 4A
             try:
                 used = sh.get_used_area()
                 total = sh.sheet_w * sh.sheet_h
@@ -573,7 +596,7 @@ class CutApp(App):
             except Exception as e:
                 return self.report("STAGE4A_GETAREA", str(e))
 
-            # 4B: χτίσε placed_list
+            # 4B
             safe_placed_list = []
             try:
                 for pp in sh.get_all_placed():
@@ -598,7 +621,7 @@ class CutApp(App):
             except Exception as e:
                 return self.report("STAGE4B_BUILD_LIST", str(e))
 
-            # 4C: panel / add_widget
+            # 4C.1: create panel
             try:
                 panel = SheetPanel(
                     idx,
@@ -607,12 +630,32 @@ class CutApp(App):
                     safe_placed_list,
                     self
                 )
+            except Exception as e:
+                # δεν έγινε καν το panel
+                self._append_log(
+                    "[STAGE4C_PANELINIT_FAIL] "
+                    + f"sheet {idx} {sh.sheet_w}x{sh.sheet_h} error: {e}"
+                )
+                # fallback panel
+                panel = FallbackPanel(idx, sh.sheet_w, sh.sheet_h, self)
+
+            # 4C.2: add panel to UI
+            try:
                 cont.add_widget(panel)
                 self._panels.append(panel)
             except Exception as e:
-                return self.report("STAGE4C_PANEL", str(e))
+                # ακόμα κι αν δεν μπαίνει στο UI,
+                # γράψε log και συνέχισε με τα άλλα φύλλα
+                self._append_log(
+                    "[STAGE4C_ADDWIDGET_FAIL] sheet "
+                    + str(idx)
+                    + " err: "
+                    + str(e)
+                )
+                # και εμφάνισε ERR στην οθόνη για να ξέρω ότι έγινε
+                self.set_status("ERR:STAGE4C_ADDWIDGET")
 
-        # STAGE5: summary
+        # STAGE5
         try:
             overall_util = (100.0*total_used/total_area) if total_area else 0.0
             ids.export_all_btn.disabled = False
@@ -630,8 +673,10 @@ class CutApp(App):
         out_dir = self.user_data_dir
         os.makedirs(out_dir, exist_ok=True)
         for panel in self._panels:
-            path = os.path.join(out_dir, f"layout_sheet_{panel.index}.png")
-            panel.view.export_png(path)
+            # FallbackPanel δεν έχει view => αγνόησέ τον
+            if hasattr(panel, "view"):
+                path = os.path.join(out_dir, f"layout_sheet_{panel.index}.png")
+                panel.view.export_png(path)
         self.set_status("PNG saved")
 
     def share_all_png(self, *args):
@@ -642,12 +687,11 @@ class CutApp(App):
         os.makedirs(out_dir, exist_ok=True)
         paths = []
         for panel in self._panels:
-            path = os.path.join(out_dir, f"layout_sheet_{panel.index}.png")
-            panel.view.export_png(path)
-            paths.append(path)
-        # μικρό status για να μην κόβεται
+            if hasattr(panel, "view"):
+                path = os.path.join(out_dir, f"layout_sheet_{panel.index}.png")
+                panel.view.export_png(path)
+                paths.append(path)
         self.set_status("Ready to share")
-        # full λίστα πάει στο log
         self._append_log("[SHARE_FILES] " + "\n".join(paths))
 
 
