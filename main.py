@@ -4,6 +4,7 @@ from kivy.properties import (
     ListProperty, NumericProperty, BooleanProperty, ObjectProperty
 )
 from kivy.uix.boxlayout import BoxLayout
+    # BoxLayout χρησιμοποιείται και στο fallback
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle, Line
 from kivy.uix.label import Label
@@ -29,13 +30,13 @@ def pastel_rgb(name: str):
 class SheetView(Widget):
     sheet_w = NumericProperty(0)     # mm
     sheet_h = NumericProperty(0)     # mm
-    pieces  = ListProperty([])       # list of dict {name,x,y,w,h,rot,last_ok_x,last_ok_y}
+    pieces  = ListProperty([])       # [{'name', 'x','y','w','h','rot','last_ok_x','last_ok_y'}, ...]
     grid_on = BooleanProperty(False)
     snap_mm = NumericProperty(10)
 
     _selected_index = NumericProperty(-1)
-    _drag_offset = ObjectProperty((0.0, 0.0))    # mm offset when dragging
-    _origin_px = ObjectProperty((0.0, 0.0))      # px origin for drawing
+    _drag_offset = ObjectProperty((0.0, 0.0))
+    _origin_px = ObjectProperty((0.0, 0.0))
     _scale = NumericProperty(1.0)
 
     def on_size(self, *args): self.redraw()
@@ -134,6 +135,7 @@ class SheetView(Widget):
             return False
         mx,my = self._px_to_mm(*touch.pos)
         hit = -1
+        # έλεγξε από πάνω προς τα κάτω (τελευταίο=πάνω)
         for i in range(len(self.pieces)-1, -1, -1):
             p = self.pieces[i]
             if p["x"] <= mx <= p["x"]+p["w"] and p["y"] <= my <= p["y"]+p["h"]:
@@ -166,12 +168,11 @@ class SheetView(Widget):
         if self.grid_on:
             cand_x = self._snap_val(cand_x)
             cand_y = self._snap_val(cand_y)
-            # ξανά clamp γιατί το snap μπορεί να πετάξει έξω
+            # ξανά clamp
             cand_x = max(0, min(cand_x, self.sheet_w - p["w"]))
             cand_y = max(0, min(cand_y, self.sheet_h - p["h"]))
 
-        if self._is_valid(self._selected_index, cand_x, cand_y,
-                          p["w"], p["h"]):
+        if self._is_valid(self._selected_index, cand_x, cand_y, p["w"], p["h"]):
             p["x"], p["y"] = cand_x, cand_y
             p["last_ok_x"], p["last_ok_y"] = cand_x, cand_y
         else:
@@ -212,7 +213,7 @@ class SheetView(Widget):
         img = Image.new("RGB", (target_w+2, target_h+2), (255,255,255))
         d = ImageDraw.Draw(img)
 
-        # περίγραμμα φύλλου
+        # φύλλο
         d.rectangle([(1,1),(1+W*scale,1+H*scale)], outline=(0,0,0), width=4)
 
         # grid αν είναι ενεργό
@@ -229,6 +230,7 @@ class SheetView(Widget):
                        fill=(220,220,220), width=1)
                 gy += spacing
 
+        # font
         try:
             font = ImageFont.truetype("arial.ttf", 20)
         except:
@@ -245,10 +247,13 @@ class SheetView(Widget):
             col = (
                 120 + (rnd & 0x3F),
                 120 + ((rnd>>6) & 0x3F),
-                120 + ((rnd>>12)&0x3F)
+                120 + ((rnd>>12) & 0x3F)
             )
 
-            d.rectangle([(x1,y1),(x2,y2)], fill=col, outline=(0,0,0), width=2)
+            d.rectangle([(x1,y1),(x2,y2)],
+                        fill=col,
+                        outline=(0,0,0),
+                        width=2)
 
             label = f"{p['name']}\n{p['w']}x{p['h']}"
             cx = (x1+x2)/2
@@ -392,14 +397,14 @@ class CutApp(App):
         else:
             self.root_widget = root
 
-        self.pieces = []     # [(w,h,qty), ...]
-        self._panels = []    # [SheetPanel,...]
+        self.pieces = []   # [(w,h,qty), ...]
+        self._panels = []  # [SheetPanel,...]
         return self.root_widget
 
     def set_status(self, txt):
         self.root_widget.ids.summary_label.text = txt
 
-    # --- piece list controls ---
+    # ------- piece list controls -------
     def add_piece(self, *args):
         ids = self.root_widget.ids
         try:
@@ -432,7 +437,7 @@ class CutApp(App):
         plist.clear_widgets()
         self.set_status("Λίστα άδεια.")
 
-    # --- save / load job ---
+    # ------- save / load job -------
     def _job_path(self):
         os.makedirs(self.user_data_dir, exist_ok=True)
         return os.path.join(self.user_data_dir, "job.json")
@@ -488,84 +493,93 @@ class CutApp(App):
 
         self.set_status("Job loaded.")
 
-    # --- run optimizer ---
+    # ------- run optimizer (ολόκληρη σε try/except) -------
     def run_optimizer(self, *args):
-        ids = self.root_widget.ids
         try:
-            W = int(ids.sheet_w.text.strip())
-            H = int(ids.sheet_h.text.strip())
-            K = int(ids.kerf.text.strip())
-            att = int(ids.attempts.text.strip())
-        except:
-            self.set_status("Λάθος διαστάσεις φύλλου/kerf/attempts.")
-            return
+            ids = self.root_widget.ids
 
-        allow_rot = ids.rot_allowed.active
-        strat = ids.strategy.text.strip()
+            # διάβασμα τιμών
+            try:
+                W = int(ids.sheet_w.text.strip())
+                H = int(ids.sheet_h.text.strip())
+                K = int(ids.kerf.text.strip())
+                att = int(ids.attempts.text.strip())
+            except:
+                self.set_status("Λάθος διαστάσεις φύλλου/kerf/attempts.")
+                return
 
-        if W<=0 or H<=0 or K<0 or att<=0:
-            self.set_status("Δώσε σωστές θετικές τιμές.")
-            return
-        if not self.pieces:
-            self.set_status("Δεν έχεις τεμάχια.")
-            return
+            allow_rot = ids.rot_allowed.active
+            strat = ids.strategy.text.strip()
 
-        try:
-            sheets = optimize_cut_multi_start(
-                W,H,K,
-                self.pieces,
-                strat,
-                allow_rot,
-                att
+            if W<=0 or H<=0 or K<0 or att<=0:
+                self.set_status("Δώσε σωστές θετικές τιμές.")
+                return
+            if not self.pieces:
+                self.set_status("Δεν έχεις τεμάχια.")
+                return
+
+            try:
+                sheets = optimize_cut_multi_start(
+                    W,H,K,
+                    self.pieces,
+                    strat,
+                    allow_rot,
+                    att
+                )
+            except Exception as e:
+                # αν κράσαρε μέσα στον optimizer
+                self.set_status(f"Σφάλμα optimizer: {e}")
+                return
+
+            cont = ids.sheets_container
+            cont.clear_widgets()
+            self._panels = []
+
+            total_used = 0
+            total_area = 0
+
+            # φτιάχνουμε panels
+            for idx, sh in enumerate(sheets, start=1):
+                used = sh.get_used_area()
+                total = sh.sheet_w * sh.sheet_h
+                total_used += used
+                total_area += total
+
+                placed_list = []
+                for p in sh.get_all_placed():
+                    placed_list.append({
+                        "name": p.piece.name,
+                        "x": p.x,
+                        "y": p.y,
+                        "w": p.width(),
+                        "h": p.height(),
+                        "rot": p.rotated,
+                        "last_ok_x": p.x,
+                        "last_ok_y": p.y
+                    })
+
+                panel = SheetPanel(
+                    idx,
+                    sh.sheet_w,
+                    sh.sheet_h,
+                    placed_list,
+                    self
+                )
+                cont.add_widget(panel)
+                self._panels.append(panel)
+
+            overall_util = (100.0*total_used/total_area) if total_area else 0.0
+            ids.export_all_btn.disabled = False
+            ids.share_all_btn.disabled = False
+            self.set_status(
+                f"Φύλλα: {len(self._panels)} | Συνολική κάλυψη {overall_util:.1f}%"
             )
+
         except Exception as e:
-            self.set_status(f"Σφάλμα: {e}")
-            return
+            # ΟΤΙΔΗΠΟΤΕ άλλο (π.χ. Kivy layout θέμα, dict key, οτιδήποτε)
+            self.set_status(f"Crash μέσα στο ΥΠΟΛΟΓΙΣΕ: {e}")
 
-        cont = ids.sheets_container
-        cont.clear_widgets()
-        self._panels = []
-
-        total_used = 0
-        total_area = 0
-
-        for idx, sh in enumerate(sheets, start=1):
-            used = sh.get_used_area()
-            total = sh.sheet_w * sh.sheet_h
-            total_used += used
-            total_area += total
-
-            placed_list = []
-            for p in sh.get_all_placed():
-                placed_list.append({
-                    "name": p.piece.name,
-                    "x": p.x,
-                    "y": p.y,
-                    "w": p.width(),
-                    "h": p.height(),
-                    "rot": p.rotated,
-                    "last_ok_x": p.x,
-                    "last_ok_y": p.y
-                })
-
-            panel = SheetPanel(
-                idx,
-                sh.sheet_w,
-                sh.sheet_h,
-                placed_list,
-                self
-            )
-            cont.add_widget(panel)
-            self._panels.append(panel)
-
-        overall_util = (100.0*total_used/total_area) if total_area else 0.0
-        ids.export_all_btn.disabled = False
-        ids.share_all_btn.disabled = False
-        self.set_status(
-            f"Φύλλα: {len(self._panels)} | Συνολική κάλυψη {overall_util:.1f}%"
-        )
-
-    # --- export/share all PNG ---
+    # ------- export/share all PNG -------
     def export_all_png(self, *args):
         if not self._panels:
             self.set_status("Δεν υπάρχουν φύλλα για export.")
@@ -588,7 +602,6 @@ class CutApp(App):
             path = os.path.join(out_dir, f"layout_sheet_{panel.index}.png")
             panel.view.export_png(path)
             paths.append(path)
-        # Σου γράφω τα path για να τα στείλεις από file manager / Viber
         last_paths = "\n".join(paths[-2:])
         self.set_status("Έτοιμα για share:\n" + last_paths)
 
