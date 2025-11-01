@@ -4,7 +4,6 @@ from kivy.properties import (
     ListProperty, NumericProperty, BooleanProperty, ObjectProperty
 )
 from kivy.uix.boxlayout import BoxLayout
-    # BoxLayout χρησιμοποιείται και στο fallback
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle, Line
 from kivy.uix.label import Label
@@ -17,6 +16,7 @@ from optimizer import optimize_cut_multi_start
 from PIL import Image, ImageDraw, ImageFont
 import os
 import json
+import traceback
 
 
 def pastel_rgb(name: str):
@@ -30,7 +30,7 @@ def pastel_rgb(name: str):
 class SheetView(Widget):
     sheet_w = NumericProperty(0)     # mm
     sheet_h = NumericProperty(0)     # mm
-    pieces  = ListProperty([])       # [{'name', 'x','y','w','h','rot','last_ok_x','last_ok_y'}, ...]
+    pieces  = ListProperty([])       # [{'name','x','y','w','h','rot','last_ok_x','last_ok_y'}, ...]
     grid_on = BooleanProperty(False)
     snap_mm = NumericProperty(10)
 
@@ -127,15 +127,17 @@ class SheetView(Widget):
                 px,py,w,h = self._mm_to_px_rect(p["x"], p["y"], p["w"], p["h"])
                 Rectangle(pos=(px,py), size=(w,h))
                 Color(0,0,0,1)
-                Line(rectangle=(px,py,w,h),
-                     width=2 if i == self._selected_index else 1)
+                Line(
+                    rectangle=(px,py,w,h),
+                    width=2 if i == self._selected_index else 1
+                )
 
     def on_touch_down(self, touch):
         if not self.collide_point(*touch.pos):
             return False
         mx,my = self._px_to_mm(*touch.pos)
         hit = -1
-        # έλεγξε από πάνω προς τα κάτω (τελευταίο=πάνω)
+        # ψάχνουμε από πάνω προς τα κάτω (τελευταίο placed = πάντα πάνω)
         for i in range(len(self.pieces)-1, -1, -1):
             p = self.pieces[i]
             if p["x"] <= mx <= p["x"]+p["w"] and p["y"] <= my <= p["y"]+p["h"]:
@@ -213,21 +215,27 @@ class SheetView(Widget):
         img = Image.new("RGB", (target_w+2, target_h+2), (255,255,255))
         d = ImageDraw.Draw(img)
 
-        # φύλλο
+        # φύλλο περίγραμμα
         d.rectangle([(1,1),(1+W*scale,1+H*scale)], outline=(0,0,0), width=4)
 
-        # grid αν είναι ενεργό
+        # grid (οπτικό) αν είναι ενεργό
         if self.grid_on:
             spacing = 100
             gx = spacing
             while gx < W:
-                d.line([(gx*scale+1,1),(gx*scale+1,H*scale+1)],
-                       fill=(220,220,220), width=1)
+                d.line(
+                    [(gx*scale+1,1),(gx*scale+1,H*scale+1)],
+                    fill=(220,220,220),
+                    width=1
+                )
                 gx += spacing
             gy = spacing
             while gy < H:
-                d.line([(1,gy*scale+1),(W*scale+1,gy*scale+1)],
-                       fill=(220,220,220), width=1)
+                d.line(
+                    [(1,gy*scale+1),(W*scale+1,gy*scale+1)],
+                    fill=(220,220,220),
+                    width=1
+                )
                 gy += spacing
 
         # font
@@ -236,7 +244,6 @@ class SheetView(Widget):
         except:
             font = ImageFont.load_default()
 
-        # κομμάτια
         for p in self.pieces:
             x1 = p["x"]*scale + 1
             y1 = p["y"]*scale + 1
@@ -247,7 +254,7 @@ class SheetView(Widget):
             col = (
                 120 + (rnd & 0x3F),
                 120 + ((rnd>>6) & 0x3F),
-                120 + ((rnd>>12) & 0x3F)
+                120 + ((rnd>>12)&0x3F)
             )
 
             d.rectangle([(x1,y1),(x2,y2)],
@@ -260,8 +267,12 @@ class SheetView(Widget):
             cy = (y1+y2)/2
             for line in label.split("\n"):
                 tw, th = d.textsize(line, font=font)
-                d.text((cx - tw/2, cy - th/2),
-                       line, fill=(0,0,0), font=font)
+                d.text(
+                    (cx - tw/2, cy - th/2),
+                    line,
+                    fill=(0,0,0),
+                    font=font
+                )
                 cy += th
 
 
@@ -493,7 +504,7 @@ class CutApp(App):
 
         self.set_status("Job loaded.")
 
-    # ------- run optimizer (ολόκληρη σε try/except) -------
+    # ------- run optimizer -------
     def run_optimizer(self, *args):
         try:
             ids = self.root_widget.ids
@@ -518,6 +529,7 @@ class CutApp(App):
                 self.set_status("Δεν έχεις τεμάχια.")
                 return
 
+            # τρέχει τον optimizer
             try:
                 sheets = optimize_cut_multi_start(
                     W,H,K,
@@ -527,8 +539,17 @@ class CutApp(App):
                     att
                 )
             except Exception as e:
-                # αν κράσαρε μέσα στον optimizer
-                self.set_status(f"Σφάλμα optimizer: {e}")
+                # π.χ. κομμάτι που δεν χωράει στο φύλλο
+                self.set_status(
+                    "Σφάλμα optimizer: "
+                    + str(e)
+                    + "\n"
+                    + traceback.format_exc()
+                )
+                return
+
+            if not sheets:
+                self.set_status("Ο optimizer γύρισε None ή άδειο αποτέλεσμα.")
                 return
 
             cont = ids.sheets_container
@@ -538,8 +559,12 @@ class CutApp(App):
             total_used = 0
             total_area = 0
 
-            # φτιάχνουμε panels
+            # Χτίζουμε panels για κάθε φύλλο
             for idx, sh in enumerate(sheets, start=1):
+                if sh is None:
+                    self.set_status("Άδειο Sheet (None) μέσα στα αποτελέσματα.")
+                    continue
+
                 used = sh.get_used_area()
                 total = sh.sheet_w * sh.sheet_h
                 total_used += used
@@ -576,8 +601,8 @@ class CutApp(App):
             )
 
         except Exception as e:
-            # ΟΤΙΔΗΠΟΤΕ άλλο (π.χ. Kivy layout θέμα, dict key, οτιδήποτε)
-            self.set_status(f"Crash μέσα στο ΥΠΟΛΟΓΙΣΕ: {e}")
+            # ANY άλλο απρόβλεπτο
+            self.set_status("Crash μέσα στο ΥΠΟΛΟΓΙΣΕ: " + str(e))
 
     # ------- export/share all PNG -------
     def export_all_png(self, *args):
