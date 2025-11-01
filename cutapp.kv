@@ -1,0 +1,139 @@
+#:kivy 2.3.0
+
+<CutRoot@BoxLayout>:
+    orientation: "vertical"
+    padding: 10
+    spacing: 10
+
+    BoxLayout:
+        size_hint_y: None
+        height: "140dp"
+        spacing: 10
+
+        BoxLayout:
+            orientation: "vertical"
+            Label: text: "Πλάτος φύλλου (mm)"; font_size: "14sp"
+            TextInput: id: sheet_w; text: "2800"; multiline: False
+            Label: text: "Ύψος φύλλου (mm)"; font_size: "14sp"
+            TextInput: id: sheet_h; text: "2070"; multiline: False
+
+        BoxLayout:
+            orientation: "vertical"
+            Label: text: "Kerf (mm)"; font_size: "14sp"
+            TextInput: id: kerf; text: "3"; multiline: False
+            Label: text: "Attempts"; font_size: "14sp"
+            TextInput: id: attempts; text: "50"; multiline: False
+
+        BoxLayout:
+            orientation: "vertical"
+            Label: text: "Rotation allowed?"; font_size: "14sp"
+            CheckBox: id: rot_allowed; active: True
+            Label: text: "Strategy"; font_size: "14sp"
+            Spinner: id: strategy; text: "BSSF"; values: ["BSSF","BAF","BLSF"]
+
+    BoxLayout:
+        size_hint_y: None
+        height: "100dp"
+        spacing: 10
+
+        BoxLayout:
+            orientation: "vertical"
+            Label: text: "Πλάτος κομματιού"; font_size: "14sp"
+            TextInput: id: pw; text: ""; multiline: False
+
+        BoxLayout:
+            orientation: "vertical"
+            Label: text: "Ύψος κομματιού"; font_size: "14sp"
+            TextInput: id: ph; text: ""; multiline: False
+
+        BoxLayout:
+            orientation: "vertical"
+            Label: text: "Ποσότητα"; font_size: "14sp"
+            TextInput: id: pq; text: "1"; multiline: False
+
+        Button:
+            text: "Πρόσθεσε κομμάτι"
+            on_release: app.add_piece()
+
+    # Λίστα τεμαχίων
+    BoxLayout:
+        size_hint_y: None
+        height: "110dp"
+        spacing: 10
+
+        BoxLayout:
+            orientation: "vertical"
+            size_hint_x: 0.7
+            Label: text: "Λίστα τεμαχίων"; font_size: "14sp"
+            ScrollView:
+                do_scroll_x: False
+                do_scroll_y: True
+                GridLayout:
+                    id: piece_list
+                    cols: 1
+                    size_hint_y: None
+                    height: self.minimum_height
+
+        BoxLayout:
+            orientation: "vertical"
+            size_hint_x: 0.3
+            Button:
+                text: "Save Job"
+                size_hint_y: None
+                height: "34dp"
+                on_release: app.save_job()
+            Button:
+                text: "Load Job"
+                size_hint_y: None
+                height: "34dp"
+                on_release: app.load_job()
+            Button:
+                text: "Clear list"
+                size_hint_y: None
+                height: "34dp"
+                on_release: app.clear_pieces()
+
+    # Υπολογισμός
+    Button:
+        size_hint_y: None
+        height: "48dp"
+        text: "ΥΠΟΛΟΓΙΣΕ"
+        on_release: app.run_optimizer()
+
+    # Κατάσταση / status
+    Label:
+        id: summary_label
+        text: "Δεν έχει γίνει υπολογισμός ακόμα."
+        size_hint_y: None
+        height: "40dp"
+        font_size: "14sp"
+
+    # Export όλων / Share όλων
+    BoxLayout:
+        size_hint_y: None
+        height: "48dp"
+        spacing: 10
+
+        Button:
+            id: export_all_btn
+            text: "💾 Export ΟΛΑ τα φύλλα σε PNG"
+            disabled: True
+            on_release: app.export_all_png()
+
+        Button:
+            id: share_all_btn
+            text: "📤 Share ΟΛΑ τα PNG"
+            disabled: True
+            on_release: app.share_all_png()
+
+    # Scroll περιοχή με τα φύλλα
+    ScrollView:
+        size_hint_y: 1
+        do_scroll_x: True
+        do_scroll_y: True
+        GridLayout:
+            id: sheets_container
+            cols: 1
+            size_hint_y: None
+            height: self.minimum_height
+            spacing: 20
