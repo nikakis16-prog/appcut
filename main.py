@@ -3,6 +3,10 @@ from kivy.lang import Builder
 from kivy.properties import (
     ListProperty, NumericProperty, BooleanProperty, ObjectProperty
 )
+    # ListProperty = λίστα που ενημερώνει UI όταν αλλάζει
+    # NumericProperty = αριθμός που το Kivy το αναγνωρίζει σαν observable
+    # BooleanProperty = True/False observable
+    # ObjectProperty = generic object observable
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle, Line
@@ -17,6 +21,7 @@ import traceback
 
 
 def pastel_rgb(name: str):
+    # σταθερό παστέλ χρώμα για κάθε όνομα κομματιού
     rnd = hash(name) & 0xFFFFFF
     r = (120 + (rnd & 0x3F)) / 255.0
     g = (120 + ((rnd >> 6) & 0x3F)) / 255.0
@@ -25,9 +30,10 @@ def pastel_rgb(name: str):
 
 
 class SheetView(Widget):
-    sheet_w = NumericProperty(0)
-    sheet_h = NumericProperty(0)
-    pieces  = ListProperty([])
+    # μία σχεδιαστική προβολή για ένα φύλλο μελαμίνης
+    sheet_w = NumericProperty(0)   # πλάτος φύλλου σε mm
+    sheet_h = NumericProperty(0)   # ύψος φύλλου σε mm
+    pieces  = ListProperty([])     # [{name,x,y,w,h,...}, ...]
     grid_on = BooleanProperty(False)
     snap_mm = NumericProperty(10)
 
@@ -44,6 +50,7 @@ class SheetView(Widget):
     def on_grid_on(self, *args): self.redraw()
 
     def _layout_metrics(self):
+        # υπολογίζει πώς θα χωρέσει το φύλλο μέσα στο widget
         margin = dp(8)
         avail_w = max(1, self.width - 2*margin)
         avail_h = max(1, self.height - 2*margin)
@@ -57,29 +64,32 @@ class SheetView(Widget):
         return ox, oy, scale
 
     def _px_to_mm(self, px, py):
+        # από οθόνη (pixel) σε mm φύλλου
         ox, oy = self._origin_px
         s = self._scale
         return (px - ox) / s, (py - oy) / s
 
     def _mm_to_px_rect(self, x, y, w, h):
+        # από mm φύλλου σε pixel οθόνης
         ox, oy, s = self._origin_px[0], self._origin_px[1], self._scale
         return (ox + x*s, oy + y*s, w*s, h*s)
 
     @staticmethod
     def _overlap(a, b):
+        # ελέγχει αν δυο ορθογώνια επικαλύπτονται
         ax2 = a["x"] + a["w"]; ay2 = a["y"] + a["h"]
         bx2 = b["x"] + b["w"]; by2 = b["y"] + b["h"]
         return not (ax2 <= b["x"] or bx2 <= a["x"] or ay2 <= b["y"] or by2 <= a["y"])
 
     def _is_valid(self, idx, new_x, new_y, new_w, new_h):
-        # μέσα στο φύλλο
+        # 1. να είναι μέσα στο φύλλο
         if new_x < 0 or new_y < 0:
             return False
         if new_x + new_w > self.sheet_w:
             return False
         if new_y + new_h > self.sheet_h:
             return False
-        # όχι overlap
+        # 2. να μην πατάει πάνω σε άλλο κομμάτι
         test = {"x": new_x, "y": new_y, "w": new_w, "h": new_h}
         for j, other in enumerate(self.pieces):
             if j == idx:
@@ -89,22 +99,25 @@ class SheetView(Widget):
         return True
 
     def _snap_val(self, v):
+        # σνάπ στο grid (π.χ. κάθε 10mm)
         step = max(1, int(self.snap_mm))
         return round(v / step) * step
 
     def redraw(self):
+        # ξαναζωγράφισε το φύλλο
         if self.sheet_w <= 0 or self.sheet_h <= 0:
             return
         ox, oy, s = self._layout_metrics()
         self.canvas.clear()
         with self.canvas:
-            # φύλλο
+            # λευκό background φύλλου
             Color(1,1,1,1)
             Rectangle(pos=(ox,oy), size=(self.sheet_w*s, self.sheet_h*s))
+            # περίγραμμα φύλλου
             Color(0,0,0,1)
             Line(rectangle=(ox,oy,self.sheet_w*s,self.sheet_h*s), width=1.4)
 
-            # grid κάθε 100mm (αν είναι ενεργό)
+            # grid κάθε 100mm
             if self.grid_on:
                 Color(0.8,0.8,0.8,1)
                 spacing = 100
@@ -130,6 +143,7 @@ class SheetView(Widget):
                 )
 
     def on_touch_down(self, touch):
+        # επίλεξε κομμάτι για drag αν πατάς πάνω του
         if not self.collide_point(*touch.pos):
             return False
         mx,my = self._px_to_mm(*touch.pos)
@@ -149,6 +163,7 @@ class SheetView(Widget):
         return False
 
     def on_touch_move(self, touch):
+        # drag κομματιού με έλεγχο ορίων / overlap
         if self._selected_index < 0:
             return False
         mx,my = self._px_to_mm(*touch.pos)
@@ -158,9 +173,11 @@ class SheetView(Widget):
         cand_x = mx - dx
         cand_y = my - dy
 
+        # clamp στα όρια του φύλλου
         cand_x = max(0, min(cand_x, self.sheet_w - p["w"]))
         cand_y = max(0, min(cand_y, self.sheet_h - p["h"]))
 
+        # αν έχουμε grid_on -> snap
         if self.grid_on:
             cand_x = self._snap_val(cand_x)
             cand_y = self._snap_val(cand_y)
@@ -168,9 +185,11 @@ class SheetView(Widget):
             cand_y = max(0, min(cand_y, self.sheet_h - p["h"]))
 
         if self._is_valid(self._selected_index, cand_x, cand_y, p["w"], p["h"]):
+            # valid νέα θέση
             p["x"], p["y"] = cand_x, cand_y
             p["last_ok_x"], p["last_ok_y"] = cand_x, cand_y
         else:
+            # κράτα την τελευταία καλή
             p["x"] = p.get("last_ok_x", p["x"])
             p["y"] = p.get("last_ok_y", p["y"])
 
@@ -181,6 +200,7 @@ class SheetView(Widget):
         return self._selected_index >= 0
 
     def rotate_selected(self, *args):
+        # περιστροφή επιλεγμένου κομματιού 90°
         i = self._selected_index
         if i < 0:
             return
@@ -198,6 +218,7 @@ class SheetView(Widget):
             self.redraw()
 
     def export_png(self, out_path):
+        # κάνει render σε PNG για export/share/εκτύπωση
         W, H = self.sheet_w, self.sheet_h
         if W <= 0 or H <= 0:
             return
@@ -211,7 +232,7 @@ class SheetView(Widget):
         # περίγραμμα φύλλου
         d.rectangle([(1,1),(1+W*scale,1+H*scale)], outline=(0,0,0), width=4)
 
-        # grid στο export αν είναι ενεργό
+        # grid στο export
         if self.grid_on:
             spacing = 100
             gx = spacing
@@ -231,11 +252,13 @@ class SheetView(Widget):
                 )
                 gy += spacing
 
+        # γραμματοσειρά
         try:
             font = ImageFont.truetype("arial.ttf", 20)
         except:
             font = ImageFont.load_default()
 
+        # κομμάτια
         for p in self.pieces:
             x1 = p["x"]*scale + 1
             y1 = p["y"]*scale + 1
@@ -270,9 +293,9 @@ class SheetView(Widget):
 
 class SimplePanel(BoxLayout):
     """
-    Ελαφρύ panel που φιλοξενεί ένα SheetView.
-    Μπορεί να είναι αυτό που δεν αρέσει στο Android, οπότε
-    θα το πιάσουμε με try/except και θα δούμε το error.
+    Panel για 1 φύλλο:
+    - Header info (scrap, κάλυψη)
+    - SheetView (drag, rotate, κλπ)
     """
     def __init__(self, index, sheet_w, sheet_h, placed_list, parent_app, **kwargs):
         super().__init__(
@@ -286,13 +309,16 @@ class SimplePanel(BoxLayout):
         self.index = index
         self.parent_app = parent_app
 
-        # header πληροφορίες
-        used = sum(p["w"]*p["h"] for p in placed_list)
-        total = sheet_w * sheet_h
+        # αν sheet_w/h είναι None, αυτό θα βοηθήσει το debug
+        used = sum(p["w"]*p["h"] for p in placed_list) if placed_list else 0
+        total = (sheet_w or 0) * (sheet_h or 0)
         util = (100.0*used/total) if total else 0.0
-        scrap = total - used
+        scrap = total - used if total else 0
 
-        header_text = f"Φύλλο {index} | {sheet_w}x{sheet_h} | Scrap {scrap} | Κάλυψη {util:.1f}%"
+        header_text = (
+            f"Φύλλο {index} | {sheet_w}x{sheet_h} | "
+            f"Scrap {scrap} | Κάλυψη {util:.1f}%"
+        )
 
         header_lbl = Label(
             text=header_text,
@@ -302,13 +328,13 @@ class SimplePanel(BoxLayout):
         )
         self.add_widget(header_lbl)
 
-        # το σχέδιο
+        # το σχέδιο / interaction
         self.view = SheetView(
             size_hint_y=None,
             height=dp(340),
-            sheet_w=sheet_w,
-            sheet_h=sheet_h,
-            pieces=placed_list,
+            sheet_w=sheet_w if sheet_w else 0,
+            sheet_h=sheet_h if sheet_h else 0,
+            pieces=placed_list if placed_list else [],
             grid_on=False,
             snap_mm=10,
         )
@@ -338,9 +364,11 @@ class CutApp(App):
         return self.root_widget
 
     def set_status(self, txt):
+        # γράφει κάτω στο status label
         self.root_widget.ids.summary_label.text = txt
 
     def _append_log(self, longtext):
+        # γράφουμε debug σε αρχείο για πιο μετά
         try:
             out_dir = self.user_data_dir
             os.makedirs(out_dir, exist_ok=True)
@@ -351,6 +379,7 @@ class CutApp(App):
             pass
 
     def report(self, stage, detail=""):
+        # generic καταγραφή error
         self.set_status(f"ERR:{stage}")
         full = f"[{stage}] {detail}\nTRACE:\n{traceback.format_exc()}"
         self._append_log(full)
@@ -388,7 +417,7 @@ class CutApp(App):
         self.root_widget.ids.piece_list.clear_widgets()
         self.set_status("Λίστα άδεια.")
 
-    # ------- save / load --------
+    # ------- save / load job --------
     def _job_path(self):
         os.makedirs(self.user_data_dir, exist_ok=True)
         return os.path.join(self.user_data_dir, "job.json")
@@ -446,9 +475,9 @@ class CutApp(App):
 
         self.set_status("Job loaded")
 
-    # ------- optimizer --------
+    # ------- optimizer / δημιουργία φύλλων --------
     def run_optimizer(self, *args):
-        # STAGE1: input
+        # STAGE1: input parsing
         try:
             ids = self.root_widget.ids
             W = int(ids.sheet_w.text.strip())
@@ -467,7 +496,7 @@ class CutApp(App):
             self.set_status("Δεν έχεις τεμάχια.")
             return
 
-        # STAGE2: optimizer
+        # STAGE2: optimization (άλγο που γεμίζει τα φύλλα)
         try:
             sheets = optimize_cut_multi_start(
                 W,H,K,
@@ -483,7 +512,7 @@ class CutApp(App):
             self.set_status("Άδειο αποτέλεσμα (κανένα φύλλο).")
             return
 
-        # STAGE3: καθάρισμα container
+        # STAGE3: καθάρισε το UI container
         try:
             cont = ids.sheets_container
             cont.clear_widgets()
@@ -496,13 +525,14 @@ class CutApp(App):
         panel_fail = False
         panel_fail_msg = ""
 
-        # STAGE4: δημιουργία panel για κάθε φύλλο
+        # STAGE4: για κάθε φύλλο που έφτιαξε ο optimizer
         for idx, sh in enumerate(sheets, start=1):
             if sh is None:
+                # δεν περιμένω να γίνει αλλά το κρατάμε
                 self._append_log("[STAGE4_NULL] sheet is None at index " + str(idx))
                 continue
 
-            # υπολογισμός χρήσης/area
+            # 4A: metrics φύλλου
             try:
                 used = sh.get_used_area()
                 total = sh.sheet_w * sh.sheet_h
@@ -511,7 +541,7 @@ class CutApp(App):
             except Exception as e:
                 return self.report("STAGE4A_GETAREA", str(e))
 
-            # μετατροπή placed pieces σε dicts
+            # 4B: μετέτρεψε τα PlacedPiece αντικείμενα σε dicts για το UI
             safe_placed_list = []
             try:
                 for pp in sh.get_all_placed():
@@ -533,57 +563,60 @@ class CutApp(App):
             except Exception as e:
                 return self.report("STAGE4B_BUILD_LIST", str(e))
 
-            # προσπαθώ να φτιάξω panel
+            # 4C: φτιάξε το panel για το φύλλο
             try:
                 panel = SimplePanel(
                     idx,
-                    sh.sheet_w,
-                    sh.sheet_h,
+                    getattr(sh, "sheet_w", None),
+                    getattr(sh, "sheet_h", None),
                     safe_placed_list,
                     self
                 )
             except Exception as e:
-                # εδώ είναι το σημείο που μέχρι τώρα έσκαγε σιωπηλά
+                # Αν αποτύχει εδώ, θέλω να ΔΩ το γιατί στην οθόνη
                 panel_fail = True
-                panel_fail_msg = f"SIMPLEPANEL {str(e)}"
-                # γράφουμε log για εμάς
-                self._append_log(
-                    "[STAGE4C_SIMPLEPANEL_FAIL] "
-                    + f"sheet {idx} {sh.sheet_w}x{sh.sheet_h} error: {e}"
+                msg = (
+                    f"SIMPLEPANEL {type(e).__name__}: {e} | "
+                    f"sheet_w={getattr(sh,'sheet_w',None)} "
+                    f"sheet_h={getattr(sh,'sheet_h',None)} "
+                    f"pieces={len(safe_placed_list)}"
                 )
-                # και συνεχίζουμε στο επόμενο φύλλο χωρίς append
+                panel_fail_msg = msg
+                self._append_log("[STAGE4C_SIMPLEPANEL_FAIL] " + msg)
+                # δείξε σύντομο status για να μου το πεις
+                self.set_status("ERR:"+msg[:70])
                 continue
 
-            # αν φτιάχτηκε το panel, το κρατάμε
+            # 4D: ακόμα κι αν δεν καταφέρει να το δείξει στο UI,
+            #     τουλάχιστον κράτα το panel στη μνήμη για export_png
             self._panels.append(panel)
 
-            # και προσπαθούμε να το δείξουμε οπτικά
+            # δοκίμασε να το βάλεις οπτικά στο container
             try:
                 cont.add_widget(panel)
             except Exception as e:
                 panel_fail = True
-                panel_fail_msg = f"ADDWIDGET {str(e)}"
-                self._append_log(
-                    "[STAGE4D_ADDWIDGET_FAIL] sheet "
-                    + str(idx)
-                    + " err: "
-                    + str(e)
+                msg = (
+                    f"ADDWIDGET {type(e).__name__}: {e} | "
+                    f"panel_index={idx}"
                 )
-                # δεν σταματάμε, συνεχίζουμε με τα υπόλοιπα φύλλα
+                panel_fail_msg = msg
+                self._append_log("[STAGE4D_ADDWIDGET_FAIL] " + msg)
+                # δεν σταματάμε, προχωράμε στα επόμενα φύλλα
 
-        # STAGE5: σύνοψη στο status
+        # STAGE5: ενημέρωση status στο τέλος
         try:
             overall_util = (100.0*total_used/total_area) if total_area else 0.0
+
+            # enable τα κουμπιά export/share τώρα που έχουμε panels (ή και όχι)
             ids.export_all_btn.disabled = False
             ids.share_all_btn.disabled = False
 
             if panel_fail and len(self._panels) == 0:
-                # απόλυτο fail: δεν κατάφερε να δημιουργήσει ούτε ΕΝΑ panel
-                # => δείξε μου ΕΣΥ αυτό το μήνυμα και πες μου τι γράφει ακριβώς
-                self.set_status(f"ERR:{panel_fail_msg}")
+                # καθολικό fail, ούτε ένα panel usable
+                self.set_status("ERR:"+panel_fail_msg[:70])
             else:
-                # έχουμε τουλάχιστον 1 panel στη μνήμη
-                # (ίσως δεν φαίνεται στην οθόνη, αλλά υπάρχει για export)
+                # έχουμε τουλάχιστον ένα panel usable
                 self.set_status(
                     f"OK ✔  Φύλλα: {len(self._panels)} | Κάλυψη {overall_util:.1f}%"
                 )
