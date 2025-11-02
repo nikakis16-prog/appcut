@@ -5,7 +5,6 @@
     padding: dp(8)
     spacing: dp(8)
 
-    # ------- ΠΑΝΩ ΜΕΡΟΣ: Εισαγωγή παραμέτρων φύλλου --------
     BoxLayout:
         size_hint_y: None
         height: dp(120)
@@ -97,8 +96,6 @@
         BoxLayout:
             orientation: "vertical"
             spacing: dp(4)
-
-            # --------- Προσθήκη τεμαχίων ---------
             BoxLayout:
                 spacing: dp(4)
                 size_hint_y: None
@@ -107,49 +104,40 @@
                     text: "W"
                     size_hint_x: None
                     width: dp(20)
-                    font_size: "12sp"
                 TextInput:
                     id: pw
                     text: ""
                     multiline: False
                     input_filter: 'int'
-                    font_size: "14sp"
                 Label:
                     text: "H"
                     size_hint_x: None
                     width: dp(20)
-                    font_size: "12sp"
                 TextInput:
                     id: ph
                     text: ""
                     multiline: False
                     input_filter: 'int'
-                    font_size: "14sp"
                 Label:
                     text: "Q"
                     size_hint_x: None
                     width: dp(20)
-                    font_size: "12sp"
                 TextInput:
                     id: pq
                     text: "1"
                     multiline: False
                     input_filter: 'int'
-                    font_size: "14sp"
                 Button:
                     text: "+Τεμ"
                     size_hint_x: None
                     width: dp(60)
-                    font_size: "12sp"
                     on_release: app.add_piece()
                 Button:
                     text: "Καθάρισε"
                     size_hint_x: None
                     width: dp(70)
-                    font_size: "12sp"
                     on_release: app.clear_pieces()
 
-            # λίστα τεμαχίων
             ScrollView:
                 do_scroll_x: False
                 bar_width: dp(4)
@@ -161,38 +149,30 @@
                     row_default_height: dp(22)
                     row_force_default: False
 
-    # ----------- Κουμπιά εργασίας (save/load/run/export) -----------
     BoxLayout:
         size_hint_y: None
         height: dp(40)
         spacing: dp(6)
-
         Button:
             text: "Αποθήκευση"
-            font_size: "12sp"
             on_release: app.save_job()
         Button:
             text: "Φόρτωση"
-            font_size: "12sp"
             on_release: app.load_job()
         Button:
             text: "Υπολόγισε"
-            font_size: "12sp"
             on_release: app.run_optimizer()
         Button:
             id: export_all_btn
             text: "Export PNG"
-            font_size: "12sp"
             disabled: True
             on_release: app.export_all_png()
         Button:
             id: share_all_btn
             text: "Share Paths"
-            font_size: "12sp"
             disabled: True
             on_release: app.share_all_png()
 
-    # ----------- Περιοχή που θα μπαίνουν τα φύλλα (panels) -----------
     ScrollView:
         bar_width: dp(4)
         do_scroll_x: False
@@ -206,7 +186,6 @@
             spacing: dp(8)
             padding: dp(4), dp(4)
 
-    # ----------- Status & Debug -----------
     BoxLayout:
         orientation: "vertical"
         size_hint_y: None
@@ -219,8 +198,6 @@
             Rectangle:
                 pos: self.pos
                 size: self.size
-
-        # μικρό status (μια γραμμή)
         Label:
             id: summary_label
             text: "Ready"
@@ -231,8 +208,6 @@
             text_size: self.size
             halign: "left"
             valign: "middle"
-
-        # μεγάλο debug πολυγραμμικό, κάνει wrap
         ScrollView:
             bar_width: dp(4)
             do_scroll_x: False
