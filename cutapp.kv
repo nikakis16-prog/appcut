@@ -1,187 +1,248 @@
-#:kivy 2.3.0
+#:import dp kivy.metrics.dp
 
-BoxLayout:
+<RootLayout@BoxLayout>:
     orientation: "vertical"
-    padding: 10
-    spacing: 10
+    padding: dp(8)
+    spacing: dp(8)
 
+    # ------- ΠΑΝΩ ΜΕΡΟΣ: Εισαγωγή παραμέτρων φύλλου --------
     BoxLayout:
         size_hint_y: None
-        height: "140dp"
-        spacing: 10
+        height: dp(120)
+        spacing: dp(6)
 
         BoxLayout:
             orientation: "vertical"
-            Label:
-                text: "Πλάτος φύλλου (mm)"
-                font_size: "14sp"
-            TextInput:
-                id: sheet_w
-                text: "2800"
-                multiline: False
-                input_filter: 'int'
-            Label:
-                text: "Ύψος φύλλου (mm)"
-                font_size: "14sp"
-            TextInput:
-                id: sheet_h
-                text: "2070"
-                multiline: False
-                input_filter: 'int'
+            spacing: dp(4)
+
+            BoxLayout:
+                spacing: dp(4)
+                size_hint_y: None
+                height: dp(26)
+                Label:
+                    text: "Φύλλο Πλάτος"
+                    size_hint_x: None
+                    width: dp(90)
+                    font_size: "12sp"
+                TextInput:
+                    id: sheet_w
+                    text: "2800"
+                    multiline: False
+                    input_filter: 'int'
+                    font_size: "14sp"
+                Label:
+                    text: "Ύψος"
+                    size_hint_x: None
+                    width: dp(50)
+                    font_size: "12sp"
+                TextInput:
+                    id: sheet_h
+                    text: "2070"
+                    multiline: False
+                    input_filter: 'int'
+                    font_size: "14sp"
+
+            BoxLayout:
+                spacing: dp(4)
+                size_hint_y: None
+                height: dp(26)
+                Label:
+                    text: "Kerf"
+                    size_hint_x: None
+                    width: dp(40)
+                    font_size: "12sp"
+                TextInput:
+                    id: kerf
+                    text: "3"
+                    multiline: False
+                    input_filter: 'int'
+                    font_size: "14sp"
+                Label:
+                    text: "Attempts"
+                    size_hint_x: None
+                    width: dp(70)
+                    font_size: "12sp"
+                TextInput:
+                    id: attempts
+                    text: "10"
+                    multiline: False
+                    input_filter: 'int'
+                    font_size: "14sp"
+
+            BoxLayout:
+                spacing: dp(4)
+                size_hint_y: None
+                height: dp(26)
+                Label:
+                    text: "Strategy"
+                    size_hint_x: None
+                    width: dp(70)
+                    font_size: "12sp"
+                TextInput:
+                    id: strategy
+                    text: "BSSF"
+                    multiline: False
+                    font_size: "14sp"
+                CheckBox:
+                    id: rot_allowed
+                    active: True
+                    size_hint_x: None
+                    width: dp(40)
+                Label:
+                    text: "Rotate OK"
+                    size_hint_x: None
+                    width: dp(70)
+                    font_size: "12sp"
 
         BoxLayout:
             orientation: "vertical"
-            Label:
-                text: "Kerf (mm)"
-                font_size: "14sp"
-            TextInput:
-                id: kerf
-                text: "3"
-                multiline: False
-                input_filter: 'int'
-            Label:
-                text: "Attempts"
-                font_size: "14sp"
-            TextInput:
-                id: attempts
-                text: "50"
-                multiline: False
-                input_filter: 'int'
+            spacing: dp(4)
 
-        BoxLayout:
-            orientation: "vertical"
-            Label:
-                text: "Rotation allowed?"
-                font_size: "14sp"
-            CheckBox:
-                id: rot_allowed
-                active: True
-            Label:
-                text: "Strategy"
-                font_size: "14sp"
-            Spinner:
-                id: strategy
-                text: "BSSF"
-                values: ["BSSF","BAF","BLSF"]
+            # --------- Προσθήκη τεμαχίων ---------
+            BoxLayout:
+                spacing: dp(4)
+                size_hint_y: None
+                height: dp(26)
+                Label:
+                    text: "W"
+                    size_hint_x: None
+                    width: dp(20)
+                    font_size: "12sp"
+                TextInput:
+                    id: pw
+                    text: ""
+                    multiline: False
+                    input_filter: 'int'
+                    font_size: "14sp"
+                Label:
+                    text: "H"
+                    size_hint_x: None
+                    width: dp(20)
+                    font_size: "12sp"
+                TextInput:
+                    id: ph
+                    text: ""
+                    multiline: False
+                    input_filter: 'int'
+                    font_size: "14sp"
+                Label:
+                    text: "Q"
+                    size_hint_x: None
+                    width: dp(20)
+                    font_size: "12sp"
+                TextInput:
+                    id: pq
+                    text: "1"
+                    multiline: False
+                    input_filter: 'int'
+                    font_size: "14sp"
+                Button:
+                    text: "+Τεμ"
+                    size_hint_x: None
+                    width: dp(60)
+                    font_size: "12sp"
+                    on_release: app.add_piece()
+                Button:
+                    text: "Καθάρισε"
+                    size_hint_x: None
+                    width: dp(70)
+                    font_size: "12sp"
+                    on_release: app.clear_pieces()
 
-    BoxLayout:
-        size_hint_y: None
-        height: "100dp"
-        spacing: 10
-
-        BoxLayout:
-            orientation: "vertical"
-            Label:
-                text: "Πλάτος κομματιού"
-                font_size: "14sp"
-            TextInput:
-                id: pw
-                text: ""
-                multiline: False
-                input_filter: 'int'
-
-        BoxLayout:
-            orientation: "vertical"
-            Label:
-                text: "Ύψος κομματιού"
-                font_size: "14sp"
-            TextInput:
-                id: ph
-                text: ""
-                multiline: False
-                input_filter: 'int'
-
-        BoxLayout:
-            orientation: "vertical"
-            Label:
-                text: "Ποσότητα"
-                font_size: "14sp"
-            TextInput:
-                id: pq
-                text: "1"
-                multiline: False
-                input_filter: 'int'
-
-        Button:
-            text: "Πρόσθεσε κομμάτι"
-            on_release: app.add_piece()
-
-    BoxLayout:
-        size_hint_y: None
-        height: "110dp"
-        spacing: 10
-
-        BoxLayout:
-            orientation: "vertical"
-            size_hint_x: 0.7
-            Label:
-                text: "Λίστα τεμαχίων"
-                font_size: "14sp"
+            # λίστα τεμαχίων
             ScrollView:
                 do_scroll_x: False
-                do_scroll_y: True
+                bar_width: dp(4)
                 GridLayout:
                     id: piece_list
                     cols: 1
                     size_hint_y: None
                     height: self.minimum_height
+                    row_default_height: dp(22)
+                    row_force_default: False
 
-        BoxLayout:
-            orientation: "vertical"
-            size_hint_x: 0.3
-            Button:
-                text: "Save Job"
-                size_hint_y: None
-                height: "34dp"
-                on_release: app.save_job()
-            Button:
-                text: "Load Job"
-                size_hint_y: None
-                height: "34dp"
-                on_release: app.load_job()
-            Button:
-                text: "Clear list"
-                size_hint_y: None
-                height: "34dp"
-                on_release: app.clear_pieces()
-
-    Button:
-        size_hint_y: None
-        height: "48dp"
-        text: "ΥΠΟΛΟΓΙΣΕ"
-        on_release: app.run_optimizer()
-
-    Label:
-        id: summary_label
-        text: "Δεν έχει γίνει υπολογισμός ακόμα."
-        size_hint_y: None
-        height: "40dp"
-        font_size: "14sp"
-
+    # ----------- Κουμπιά εργασίας (save/load/run/export) -----------
     BoxLayout:
         size_hint_y: None
-        height: "48dp"
-        spacing: 10
+        height: dp(40)
+        spacing: dp(6)
 
+        Button:
+            text: "Αποθήκευση"
+            font_size: "12sp"
+            on_release: app.save_job()
+        Button:
+            text: "Φόρτωση"
+            font_size: "12sp"
+            on_release: app.load_job()
+        Button:
+            text: "Υπολόγισε"
+            font_size: "12sp"
+            on_release: app.run_optimizer()
         Button:
             id: export_all_btn
-            text: "💾 Export ΟΛΑ τα φύλλα σε PNG"
+            text: "Export PNG"
+            font_size: "12sp"
             disabled: True
             on_release: app.export_all_png()
-
         Button:
             id: share_all_btn
-            text: "📤 Share ΟΛΑ τα PNG"
+            text: "Share Paths"
+            font_size: "12sp"
             disabled: True
             on_release: app.share_all_png()
 
+    # ----------- Περιοχή που θα μπαίνουν τα φύλλα (panels) -----------
     ScrollView:
-        size_hint_y: 1
-        do_scroll_x: True
-        do_scroll_y: True
+        bar_width: dp(4)
+        do_scroll_x: False
         GridLayout:
             id: sheets_container
             cols: 1
             size_hint_y: None
             height: self.minimum_height
-            spacing: 20
+            row_default_height: dp(380)
+            row_force_default: False
+            spacing: dp(8)
+            padding: dp(4), dp(4)
+
+    # ----------- Status & Debug -----------
+    BoxLayout:
+        orientation: "vertical"
+        size_hint_y: None
+        height: dp(120)
+        padding: dp(4)
+        spacing: dp(4)
+        canvas.before:
+            Color:
+                rgba: 0.9,0.9,0.9,1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        # μικρό status (μια γραμμή)
+        Label:
+            id: summary_label
+            text: "Ready"
+            size_hint_y: None
+            height: dp(24)
+            font_size: "13sp"
+            color: 0,0,0,1
+            text_size: self.size
+            halign: "left"
+            valign: "middle"
+
+        # μεγάλο debug πολυγραμμικό, κάνει wrap
+        ScrollView:
+            bar_width: dp(4)
+            do_scroll_x: False
+            Label:
+                id: debug_label
+                text: ""
+                size_hint_y: None
+                height: self.texture_size[1]
+                font_size: "12sp"
+                color: 0,0,0,1
+                text_size: self.width, None
+                halign: "left"
+                valign: "top"
