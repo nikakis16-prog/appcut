@@ -208,10 +208,10 @@ class SheetView(Widget):
         img = Image.new("RGB", (target_w+2, target_h+2), (255,255,255))
         d = ImageDraw.Draw(img)
 
-        # φύλλο
+        # περίγραμμα φύλλου
         d.rectangle([(1,1),(1+W*scale,1+H*scale)], outline=(0,0,0), width=4)
 
-        # grid αν είναι ενεργό
+        # grid στο export αν είναι ενεργό
         if self.grid_on:
             spacing = 100
             gx = spacing
@@ -270,7 +270,9 @@ class SheetView(Widget):
 
 class SimplePanel(BoxLayout):
     """
-    Ελαφρύ panel (Android safe).
+    Ελαφρύ panel που φιλοξενεί ένα SheetView.
+    Μπορεί να είναι αυτό που δεν αρέσει στο Android, οπότε
+    θα το πιάσουμε με try/except και θα δούμε το error.
     """
     def __init__(self, index, sheet_w, sheet_h, placed_list, parent_app, **kwargs):
         super().__init__(
@@ -284,19 +286,23 @@ class SimplePanel(BoxLayout):
         self.index = index
         self.parent_app = parent_app
 
+        # header πληροφορίες
         used = sum(p["w"]*p["h"] for p in placed_list)
         total = sheet_w * sheet_h
         util = (100.0*used/total) if total else 0.0
         scrap = total - used
 
+        header_text = f"Φύλλο {index} | {sheet_w}x{sheet_h} | Scrap {scrap} | Κάλυψη {util:.1f}%"
+
         header_lbl = Label(
-            text=f"Φύλλο {index} | {sheet_w}x{sheet_h} | Scrap {scrap} | Κάλυψη {util:.1f}%",
+            text=header_text,
             size_hint_y=None,
             height=dp(24),
             font_size="14sp"
         )
         self.add_widget(header_lbl)
 
+        # το σχέδιο
         self.view = SheetView(
             size_hint_y=None,
             height=dp(340),
@@ -442,7 +448,7 @@ class CutApp(App):
 
     # ------- optimizer --------
     def run_optimizer(self, *args):
-        # STAGE1
+        # STAGE1: input
         try:
             ids = self.root_widget.ids
             W = int(ids.sheet_w.text.strip())
@@ -461,7 +467,7 @@ class CutApp(App):
             self.set_status("Δεν έχεις τεμάχια.")
             return
 
-        # STAGE2
+        # STAGE2: optimizer
         try:
             sheets = optimize_cut_multi_start(
                 W,H,K,
@@ -477,7 +483,7 @@ class CutApp(App):
             self.set_status("Άδειο αποτέλεσμα (κανένα φύλλο).")
             return
 
-        # STAGE3
+        # STAGE3: καθάρισμα container
         try:
             cont = ids.sheets_container
             cont.clear_widgets()
@@ -487,13 +493,16 @@ class CutApp(App):
 
         total_used = 0
         total_area = 0
+        panel_fail = False
+        panel_fail_msg = ""
 
-        # STAGE4
+        # STAGE4: δημιουργία panel για κάθε φύλλο
         for idx, sh in enumerate(sheets, start=1):
             if sh is None:
                 self._append_log("[STAGE4_NULL] sheet is None at index " + str(idx))
                 continue
 
+            # υπολογισμός χρήσης/area
             try:
                 used = sh.get_used_area()
                 total = sh.sheet_w * sh.sheet_h
@@ -502,6 +511,7 @@ class CutApp(App):
             except Exception as e:
                 return self.report("STAGE4A_GETAREA", str(e))
 
+            # μετατροπή placed pieces σε dicts
             safe_placed_list = []
             try:
                 for pp in sh.get_all_placed():
@@ -523,7 +533,7 @@ class CutApp(App):
             except Exception as e:
                 return self.report("STAGE4B_BUILD_LIST", str(e))
 
-            # δημιουργία panel
+            # προσπαθώ να φτιάξω panel
             try:
                 panel = SimplePanel(
                     idx,
@@ -533,39 +543,51 @@ class CutApp(App):
                     self
                 )
             except Exception as e:
-                # αν αποτύχει ακόμα κι εδώ, γράφουμε log και πάμε επόμενο
+                # εδώ είναι το σημείο που μέχρι τώρα έσκαγε σιωπηλά
+                panel_fail = True
+                panel_fail_msg = f"SIMPLEPANEL {str(e)}"
+                # γράφουμε log για εμάς
                 self._append_log(
                     "[STAGE4C_SIMPLEPANEL_FAIL] "
                     + f"sheet {idx} {sh.sheet_w}x{sh.sheet_h} error: {e}"
                 )
+                # και συνεχίζουμε στο επόμενο φύλλο χωρίς append
                 continue
 
-            # ΑΠΟ ΑΥΤΟ ΤΟ ΣΗΜΕΙΟ ΚΑΙ ΜΕΤΑ ΘΕΩΡΟΥΜΕ ΟΤΙ ΤΟ PANEL ΥΠΑΡΧΕΙ
-            # => το κρατάμε στη μνήμη ΓΙΑ ΣΙΓΟΥΡΙΑ
+            # αν φτιάχτηκε το panel, το κρατάμε
             self._panels.append(panel)
 
-            # προσπάθησε να το βάλεις και στο UI
+            # και προσπαθούμε να το δείξουμε οπτικά
             try:
                 cont.add_widget(panel)
             except Exception as e:
-                # αν δεν μπαίνει στο UI στο κινητό, δεν πειράζει,
-                # θα μπορείς όμως να κάνεις export_all_png
+                panel_fail = True
+                panel_fail_msg = f"ADDWIDGET {str(e)}"
                 self._append_log(
                     "[STAGE4D_ADDWIDGET_FAIL] sheet "
                     + str(idx)
                     + " err: "
                     + str(e)
                 )
-                # δεν κάνουμε report() εδώ για να μην σου σπάσουμε το τελικό OK
+                # δεν σταματάμε, συνεχίζουμε με τα υπόλοιπα φύλλα
 
-        # STAGE5
+        # STAGE5: σύνοψη στο status
         try:
             overall_util = (100.0*total_used/total_area) if total_area else 0.0
             ids.export_all_btn.disabled = False
             ids.share_all_btn.disabled = False
-            self.set_status(
-                f"OK ✔  Φύλλα: {len(self._panels)} | Κάλυψη {overall_util:.1f}%"
-            )
+
+            if panel_fail and len(self._panels) == 0:
+                # απόλυτο fail: δεν κατάφερε να δημιουργήσει ούτε ΕΝΑ panel
+                # => δείξε μου ΕΣΥ αυτό το μήνυμα και πες μου τι γράφει ακριβώς
+                self.set_status(f"ERR:{panel_fail_msg}")
+            else:
+                # έχουμε τουλάχιστον 1 panel στη μνήμη
+                # (ίσως δεν φαίνεται στην οθόνη, αλλά υπάρχει για export)
+                self.set_status(
+                    f"OK ✔  Φύλλα: {len(self._panels)} | Κάλυψη {overall_util:.1f}%"
+                )
+
         except Exception as e:
             return self.report("STAGE5_SUMMARY", str(e))
 
